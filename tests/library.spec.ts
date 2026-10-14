@@ -134,6 +134,23 @@ test('首页和详情页通过自动化无障碍审计', async ({ page }) => {
   }
 });
 
+test('后台页面与管理 API 在 Access 尚未配置时由 Worker fail closed', async ({ request }) => {
+  for (const path of [
+    '/admin',
+    '/admin/import',
+    '/admin%2Fimport',
+    '/api/admin/session',
+    '/api/admin/import',
+    '/api/admin%2Fsession',
+  ]) {
+    const response = await request.get(path);
+    expect(response.status(), `${path} should reject requests without Access configuration.`).toBe(
+      503,
+    );
+    await expect(response.json()).resolves.toEqual({ error: 'access_not_configured' });
+  }
+});
+
 test('不存在的详情路由显示站内 404 页面', async ({ page }) => {
   const response = await page.goto('/skills/not-a-real-skill');
   expect(response?.status()).toBe(404);
