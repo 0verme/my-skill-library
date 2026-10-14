@@ -1,4 +1,5 @@
 import AxeBuilder from '@axe-core/playwright';
+import { readFile } from 'node:fs/promises';
 import { expect, test } from '@playwright/test';
 
 const entries = [
@@ -141,6 +142,7 @@ test('后台页面与管理 API 在 Access 尚未配置时由 Worker fail closed
     '/admin%2Fimport',
     '/api/admin/session',
     '/api/admin/import',
+    '/api/admin/import/preview',
     '/api/admin%2Fsession',
   ]) {
     const response = await request.get(path);
@@ -149,6 +151,113 @@ test('后台页面与管理 API 在 Access 尚未配置时由 Worker fail closed
     );
     await expect(response.json()).resolves.toEqual({ error: 'access_not_configured' });
   }
+});
+
+test('导入预览 UI 默认不全选，以纯文本显示不可信 API 内容且仅做本地选择', async ({ page }) => {
+  const html = await readFile(new URL('../dist/admin/import/index.html', import.meta.url), 'utf8');
+  await page.route('**/admin/import', (route) =>
+    route.fulfill({ status: 200, contentType: 'text/html', body: html }),
+  );
+  await page.route('**/api/admin/import/preview', async (route) => {
+    expect(route.request().method()).toBe('POST');
+    expect(route.request().headers()['idempotency-key']).toMatch(/^[A-Za-z0-9_-]{16,128}$/);
+    expect(route.request().headers()['content-type']).toContain('application/json');
+    return route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        sourceRepo: 'anthropics/skills',
+        resolvedRef: 'main',
+        sourceSha: 'a'.repeat(40),
+        partial: false,
+        warnings: [],
+        errors: [],
+        candidates: [
+          {
+            sourceRepo: 'anthropics/skills',
+            sourcePath: 'skills/frontend-design/SKILL.md',
+            sourceUrl: `https://github.com/anthropics/skills/blob/${'a'.repeat(40)}/skills/frontend-design/SKILL.md`,
+            sourceSha: 'a'.repeat(40),
+            sourceAttribution: 'anthropics/skills',
+            license: 'Apache-2.0',
+            licenseStatus: 'redistributable',
+            sourceStatus: 'unverified',
+            name: 'Frontend <img src=x onerror=alert(1)>',
+            description: '<script>not executable</script>',
+            suggestedSlug: 'frontend-design',
+            mode: 'content-preview',
+            markdownPreview: '[inert](javascript:alert(1))',
+            markdownWarnings: ['unsafe_markdown_link'],
+            state: 'new',
+            updateRequiresConfirmation: false,
+            preserveLocalChanges: false,
+            selectable: true,
+          },
+          {
+            sourceRepo: 'anthropics/skills',
+            sourcePath: 'skills/docx/SKILL.md',
+            sourceUrl: `https://github.com/anthropics/skills/blob/${'a'.repeat(40)}/skills/docx/SKILL.md`,
+            sourceSha: 'a'.repeat(40),
+            sourceAttribution: 'anthropics/skills',
+            license: 'Proprietary skill-specific terms',
+            licenseStatus: 'restricted',
+            sourceStatus: 'unverified',
+            name: 'docx',
+            description: null,
+            suggestedSlug: 'docx',
+            mode: 'metadata-only',
+            markdownWarnings: [],
+            state: 'new',
+            updateRequiresConfirmation: false,
+            preserveLocalChanges: false,
+            selectable: true,
+          },
+        ],
+      }),
+    });
+  });
+
+  await page.goto('/admin/import');
+  await page.getByLabel('GitHub URL').fill('https://github.com/anthropics/skills');
+  await page.getByRole('button', { name: '解析来源' }).click();
+  await expect(page.locator('.import-candidate')).toHaveCount(2);
+  await expect(page.locator('.import-candidate input[type="checkbox"]:checked')).toHaveCount(0);
+  await expect(page.locator('[data-selection-summary]')).toContainText('已选择 0 项');
+  await expect(page.locator('.import-candidate img, .import-candidate script')).toHaveCount(0);
+  await expect(page.locator('.candidate-description')).toHaveText(
+    '<script>not executable</script>',
+  );
+  await expect(page.locator('.markdown-preview')).toHaveText('[inert](javascript:alert(1))');
+  await expect(page.locator('.candidate-facts dd').filter({ hasText: /限制再分发/ })).toBeVisible();
+
+  await page.locator('.import-candidate input[type="checkbox"]').first().check();
+  await expect(page.locator('[data-selection-summary]')).toContainText('已选择 1 项');
+  const selectedPreviewButton = page.getByRole('button', { name: '预览所选条目' });
+  await expect(selectedPreviewButton).toBeEnabled();
+  await selectedPreviewButton.click();
+  await expect(page.locator('[data-selected-preview]')).toContainText('1 项');
+  await expect(page.locator('[data-selected-preview]')).toContainText(
+    '不会创建草稿文件、分支或 PR',
+  );
+});
+
+test('GitHub API 429 的 Retry-After 在后台 UI 清晰可见', async ({ page }) => {
+  const html = await readFile(new URL('../dist/admin/import/index.html', import.meta.url), 'utf8');
+  await page.route('**/admin/import', (route) =>
+    route.fulfill({ status: 200, contentType: 'text/html', body: html }),
+  );
+  await page.route('**/api/admin/import/preview', (route) =>
+    route.fulfill({
+      status: 429,
+      headers: { 'Retry-After': '17' },
+      contentType: 'application/json',
+      body: JSON.stringify({ error: 'github_rate_limited' }),
+    }),
+  );
+  await page.goto('/admin/import');
+  await page.getByLabel('GitHub URL').fill('https://github.com/anthropics/skills');
+  await page.getByRole('button', { name: '解析来源' }).click();
+  await expect(page.locator('[data-import-status]')).toContainText('等待 17 秒后重试');
 });
 
 test('不存在的详情路由显示站内 404 页面', async ({ page }) => {

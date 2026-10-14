@@ -12,7 +12,11 @@ export default defineConfig({
     sitemap({
       filter: (page) => {
         const pathname = new URL(page).pathname;
-        return pathname !== '/admin' && !pathname.startsWith('/admin/');
+        return (
+          pathname !== '/admin' &&
+          !pathname.startsWith('/admin/') &&
+          pathname !== '/import-catalog.json'
+        );
       },
     }),
   ],

@@ -31,6 +31,7 @@ const {
   sourceRepo,
   sourcePath,
   sourceSha,
+  sourceAttribution,
   license,
   licenseStatus,
   installCommand,
@@ -325,6 +326,12 @@ const displayDate = (date: Date) => dateFormat.format(date);
                   {sourceRepo ?? '打开仓库'} ↗
                 </a>
               </dd>
+            </div>
+          )}
+          {sourceAttribution && (
+            <div>
+              <dt>来源归属</dt>
+              <dd>{sourceAttribution}</dd>
             </div>
           )}
         </dl>
