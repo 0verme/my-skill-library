@@ -1,0 +1,16 @@
+# Dependencies
+node_modules/
+
+# Astro build output
+/dist/
+/.astro/
+
+# Local tooling and environment
+.env
+.env.*
+!.env.example
+.wrangler/
+
+# Logs and OS files
+npm-debug.log*
+.DS_Store
