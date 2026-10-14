@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 900" fill="none">
+  <defs>
+    <linearGradient id="sky" x1="123" y1="76" x2="1051" y2="820" gradientUnits="userSpaceOnUse"><stop stop-color="#E9F0EC"/><stop offset="1" stop-color="#D9E3E4"/></linearGradient>
+    <filter id="drop" x="100" y="260" width="1000" height="680" color-interpolation-filters="sRGB" filterUnits="userSpaceOnUse"><feGaussianBlur stdDeviation="22"/></filter>
+  </defs>
+  <rect width="1200" height="900" rx="44" fill="#F4F1E9"/><rect x="71" y="63" width="1058" height="774" rx="34" fill="url(#sky)"/>
+  <circle cx="891" cy="224" r="91" fill="#F7E4BB"/>
+  <path d="M120 604 354 310l226 294v230H120V604Z" fill="#BBC9BE"/>
+  <path d="m355 498 229-280 281 324v292H355V498Z" fill="#9DAF9F"/>
+  <path d="m694 519 190-247 273 299v263H694V519Z" fill="#CAD4C8"/>
+  <path d="m355 310 89 116-102-34-78 56 90-138Z" fill="#EFF0E7"/><path d="m584 218 109 135-125-43-94 61 110-153Z" fill="#F4F2E9"/>
+  <ellipse cx="628" cy="742" rx="405" ry="96" fill="#394A45" opacity=".2" filter="url(#drop)"/>
+  <path d="M73 650c167-109 300-106 432-12 109 78 223 73 366-37 100-77 179-91 258-41v277H73V650Z" fill="#819A87"/>
+  <path d="M73 719c168-86 312-77 456 26 129 93 258 77 383-4 90-58 150-60 217-19v115H73V719Z" fill="#667F73"/>
+  <path d="M462 557h272v184H462z" fill="#F2E9D8"/><path d="M434 563 598 427l164 136H434Z" fill="#B47761"/>
+  <path d="M478 559 598 460l120 99" stroke="#E7C3A7" stroke-width="13" stroke-linejoin="round"/>
+  <path d="M486 586h60v73h-60zm153 0h60v73h-60z" fill="#AABDAE"/><path d="M575 640h47v101h-47z" fill="#806E5B"/>
+  <path d="M221 517v177m-31-132h63m-62 48h61" stroke="#596F61" stroke-width="12" stroke-linecap="round"/><circle cx="221" cy="493" r="47" fill="#839B80"/><circle cx="935" cy="483" r="41" fill="#82977D"/>
+  <path d="M890 570v137m-26-102h52m-51 42h50" stroke="#5F7466" stroke-width="10" stroke-linecap="round"/>
+  <path d="M251 260c38-26 77-26 116 0m302-78c30-20 62-20 92 0" stroke="#F9F8F2" stroke-width="8" stroke-linecap="round" opacity=".7"/>
+  <rect x="71" y="63" width="1058" height="774" rx="34" stroke="#fff" stroke-opacity=".6" stroke-width="3"/>
+</svg>

@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" fill="none">
+  <defs><linearGradient id="bg" x1="46" y1="21" x2="1146" y2="615" gradientUnits="userSpaceOnUse"><stop stop-color="#F5F1FF"/><stop offset="1" stop-color="#E9F0ED"/></linearGradient></defs>
+  <rect width="1200" height="630" rx="38" fill="url(#bg)"/>
+  <circle cx="1009" cy="145" r="175" fill="#DDD3FB" opacity=".55"/><circle cx="121" cy="546" r="148" fill="#D5E6DC" opacity=".62"/>
+  <rect x="85" y="86" width="66" height="66" rx="20" fill="#EEE9FF"/><path d="M105 132v-26h6l11 14 11-14h6v26h-6v-16l-11 13-11-13v16z" fill="#7155D9"/>
+  <text x="174" y="131" fill="#34333A" font-family="Inter, system-ui, sans-serif" font-size="27" font-weight="650">My Skill Library</text>
+  <text x="86" y="299" fill="#25242B" font-family="Inter, system-ui, sans-serif" font-size="66" font-weight="650">好用的 AI Skills</text>
+  <text x="86" y="389" fill="#7155D9" font-family="Inter, system-ui, sans-serif" font-size="66" font-weight="650">做成看得见的作品。</text>
+  <text x="90" y="465" fill="#76747F" font-family="Inter, system-ui, sans-serif" font-size="27">A personal gallery for Skills, Prompts &amp; Workflows</text>
+  <rect x="88" y="520" width="130" height="44" rx="22" fill="#FFFFFF" fill-opacity=".78"/><text x="112" y="549" fill="#6954B6" font-family="Inter, system-ui, sans-serif" font-size="17" font-weight="600">SKILLS</text>
+  <rect x="232" y="520" width="137" height="44" rx="22" fill="#FFFFFF" fill-opacity=".78"/><text x="255" y="549" fill="#6954B6" font-family="Inter, system-ui, sans-serif" font-size="17" font-weight="600">PROMPTS</text>
+  <rect x="383" y="520" width="168" height="44" rx="22" fill="#FFFFFF" fill-opacity=".78"/><text x="407" y="549" fill="#6954B6" font-family="Inter, system-ui, sans-serif" font-size="17" font-weight="600">WORKFLOWS</text>
+  <rect x="788" y="281" width="270" height="198" rx="27" fill="#FFFFFF" fill-opacity=".72" stroke="#FFFFFF" stroke-width="4" transform="rotate(-8 788 281)"/>
+  <rect x="833" y="327" width="268" height="197" rx="27" fill="#FFFFFF" fill-opacity=".88" stroke="#FFFFFF" stroke-width="4" transform="rotate(5 833 327)"/>
+  <rect x="878" y="361" width="82" height="112" rx="20" fill="#DCD4F7"/><rect x="973" y="361" width="81" height="112" rx="20" fill="#DCEAE4"/><rect x="1067" y="361" width="27" height="112" rx="13" fill="#F0DFC4"/>
+</svg>

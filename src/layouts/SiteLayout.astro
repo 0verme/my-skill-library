@@ -1,0 +1,95 @@
+---
+interface Props {
+  title: string;
+  description: string;
+  ogImage?: string;
+  ogType?: 'website' | 'article';
+}
+
+const { title, description, ogImage = '/og/library.svg', ogType = 'website' } = Astro.props;
+const canonical = new URL(Astro.url.pathname, Astro.site);
+const socialImage = new URL(ogImage, Astro.site);
+---
+
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#f7f7f5" />
+    <meta name="description" content={description} />
+    <link rel="canonical" href={canonical} />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="preconnect" href="https://github.com" />
+    <title>{title}</title>
+    <meta property="og:site_name" content="My Skill Library" />
+    <meta property="og:type" content={ogType} />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={canonical} />
+    <meta property="og:image" content={socialImage} />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={title} />
+    <meta name="twitter:description" content={description} />
+    <meta name="twitter:image" content={socialImage} />
+  </head>
+  <body>
+    <a class="skip-link" href="#main-content">
+      跳到主要内容
+    </a>
+    <header class="site-header">
+      <div class="header-inner">
+        <a class="brand" href="/" aria-label="My Skill Library 首页">
+          <svg class="brand-mark" viewBox="0 0 40 40" aria-hidden="true">
+            <rect x="2" y="2" width="36" height="36" rx="12" fill="#eee9ff" />
+            <path
+              d="M11 27V13h3.2l5.8 7.1 5.8-7.1H29v14h-3.3v-8.8L20 24.9l-5.7-6.7V27z"
+              fill="#7155d9"
+            />
+            <circle cx="30" cy="10" r="3" fill="#b49cff" />
+          </svg>
+          <span class="brand-name">My Skill Library</span>
+        </a>
+        <nav class="site-nav" aria-label="主导航">
+          <a href="/#library">作品画廊</a>
+          <a
+            class="nav-github"
+            href="https://github.com/0verme/my-skill-library"
+            target="_blank"
+            rel="noreferrer"
+          >
+            GitHub <span aria-hidden="true">↗</span>
+          </a>
+        </nav>
+      </div>
+    </header>
+    <slot />
+    <footer class="site-footer">
+      <div class="footer-inner">
+        <a class="footer-brand" href="/">
+          My Skill Library
+        </a>
+        <p>一间由好奇心收集、由作品说话的 AI 技能小馆。</p>
+        <span>© {new Date().getFullYear()} · Curated with care</span>
+      </div>
+    </footer>
+  </body>
+</html>
+
+<style>
+  .skip-link {
+    position: absolute;
+    z-index: 20;
+    top: 0.75rem;
+    left: 0.75rem;
+    transform: translateY(-160%);
+    border-radius: 0.65rem;
+    background: var(--ink);
+    padding: 0.75rem 1rem;
+    color: white;
+  }
+
+  .skip-link:focus {
+    transform: translateY(0);
+  }
+</style>
