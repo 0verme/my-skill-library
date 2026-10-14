@@ -1,0 +1,750 @@
+---
+import SiteLayout from '../../../layouts/SiteLayout.astro';
+import '../../../styles/global.css';
+
+const description = '在受保护的管理后台可视化编辑 Skill 元数据、草稿与公开预览。';
+---
+
+<SiteLayout title="可视化编辑器 — My Skill Library" description={description} noindex>
+  <main id="main-content" class="page-shell admin-shell">
+    <nav class="breadcrumbs" aria-label="面包屑">
+      <a href="/">首页</a>
+      <span class="breadcrumb-separator" aria-hidden="true">
+        /
+      </span>
+      <a href="/admin">管理后台</a>
+      <span class="breadcrumb-separator" aria-hidden="true">
+        /
+      </span>
+      <span aria-current="page">可视化编辑器</span>
+    </nav>
+
+    <section class="detail-hero admin-hero" aria-labelledby="editor-title">
+      <p class="eyebrow">
+        <span class="eyebrow-dot" aria-hidden="true"></span> SAFE DRAFT EDITOR
+      </p>
+      <h1 id="editor-title">可视化编辑器</h1>
+      <p class="detail-description">
+        编辑已发布条目的名称、中文简介、分类、标签、说明、安装命令、封面与画廊；草稿只保存在当前浏览器的
+        localStorage，不包含任何凭据，服务器不会保存草稿。本阶段不会创建分支、PR 或发布内容。
+      </p>
+    </section>
+
+    <section
+      class="detail-section editor-panel"
+      data-editor-app
+      aria-labelledby="editor-form-heading"
+    >
+      <div class="editor-toolbar">
+        <label for="editor-entry">已发布条目</label>
+        <select id="editor-entry" data-entry-select>
+          <option value="">选择条目以载入草稿…</option>
+        </select>
+        <button type="button" class="editor-button editor-button-secondary" data-editor-new>
+          新建草稿
+        </button>
+        <button
+          type="button"
+          class="editor-button editor-button-secondary"
+          data-editor-reimport
+          disabled
+        >
+          重新导入来源
+        </button>
+      </div>
+      <p class="editor-status" data-editor-status role="status" aria-live="polite">
+        正在读取已发布条目…
+      </p>
+      <p class="draft-banner" data-draft-banner hidden>
+        检测到此条目在本浏览器有一份未恢复的草稿。
+        <button type="button" class="editor-button" data-restore-draft>
+          恢复草稿
+        </button>
+        <button type="button" class="editor-button editor-button-secondary" data-discard-draft>
+          丢弃草稿
+        </button>
+      </p>
+      <p class="draft-note">
+        草稿仅存于本浏览器，不包含 token/密码等凭据；清除站点数据会删除草稿。
+      </p>
+
+      <div class="editor-layout">
+        <form class="editor-form" data-editor-form novalidate>
+          <h2 id="editor-form-heading" class="editor-heading">
+            条目字段
+          </h2>
+
+          <div class="editor-field">
+            <div class="editor-label-row">
+              <label for="editor-slug">Slug</label>
+              <span class="provenance-badge" data-provenance="slug">
+                未修改
+              </span>
+            </div>
+            <input id="editor-slug" type="text" maxlength="96" data-field="slug" />
+            <p class="field-hint" data-slug-hint>
+              已发布条目的 slug 保持稳定；重新导入只会更新原条目，不会创建重复卡片。
+            </p>
+          </div>
+
+          <div class="editor-field">
+            <div class="editor-label-row">
+              <label for="editor-name">名称</label>
+              <span class="provenance-badge" data-provenance="name">
+                未修改
+              </span>
+            </div>
+            <input id="editor-name" type="text" maxlength="160" data-field="name" />
+          </div>
+
+          <div class="editor-field">
+            <div class="editor-label-row">
+              <label for="editor-description">中文简介</label>
+              <span class="provenance-badge" data-provenance="description">
+                未修改
+              </span>
+            </div>
+            <textarea
+              id="editor-description"
+              rows="3"
+              maxlength="220"
+              data-field="description"
+            ></textarea>
+            <p class="field-hint">
+              <span data-description-count>0</span>/220 字符；空白或超长会在发布前校验中报错。
+            </p>
+          </div>
+
+          <div class="editor-two-columns">
+            <div class="editor-field">
+              <div class="editor-label-row">
+                <label for="editor-type">类型</label>
+                <span class="provenance-badge" data-provenance="type">
+                  未修改
+                </span>
+              </div>
+              <select id="editor-type" data-field="type">
+                <option value="skill">Skill</option>
+                <option value="prompt">Prompt</option>
+                <option value="workflow">Workflow</option>
+              </select>
+            </div>
+            <div class="editor-field">
+              <div class="editor-label-row">
+                <label for="editor-status">状态</label>
+                <span class="provenance-badge" data-provenance="status">
+                  未修改
+                </span>
+              </div>
+              <select id="editor-status" data-field="status">
+                <option value="unverified">未验证</option>
+                <option value="demo">示例 · 未声称真实运行</option>
+                <option value="verified">已验证</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="editor-two-columns">
+            <div class="editor-field">
+              <div class="editor-label-row">
+                <label for="editor-category">分类</label>
+                <span class="provenance-badge" data-provenance="category">
+                  未修改
+                </span>
+              </div>
+              <input
+                id="editor-category"
+                type="text"
+                list="editor-category-options"
+                data-field="category"
+              />
+              <datalist id="editor-category-options" data-category-options></datalist>
+            </div>
+            <div class="editor-field">
+              <div class="editor-label-row">
+                <label for="editor-tags">标签</label>
+                <span class="provenance-badge" data-provenance="tags">
+                  未修改
+                </span>
+              </div>
+              <input id="editor-tags" type="text" data-field="tags" placeholder="用逗号分隔" />
+            </div>
+          </div>
+
+          <div class="editor-field">
+            <div class="editor-label-row">
+              <label for="editor-tools">支持工具</label>
+              <span class="provenance-badge" data-provenance="supportedTools">
+                未修改
+              </span>
+            </div>
+            <input
+              id="editor-tools"
+              type="text"
+              data-field="supportedTools"
+              placeholder="用逗号分隔"
+            />
+          </div>
+
+          <div class="editor-field" data-prompt-field>
+            <div class="editor-label-row">
+              <label for="editor-prompt">完整 Prompt</label>
+              <span class="provenance-badge" data-provenance="prompt">
+                未修改
+              </span>
+            </div>
+            <textarea id="editor-prompt" rows="6" data-field="prompt"></textarea>
+            <p class="field-hint">Prompt 类型必填；不会执行或采纳其中的指令。</p>
+          </div>
+
+          <div class="editor-field">
+            <div class="editor-label-row">
+              <label for="editor-install">安装命令</label>
+              <span class="provenance-badge" data-provenance="installCommand">
+                未修改
+              </span>
+            </div>
+            <input id="editor-install" type="text" data-field="installCommand" />
+          </div>
+
+          <div class="editor-field">
+            <div class="editor-label-row">
+              <label for="editor-cover">封面</label>
+              <span class="provenance-badge" data-provenance="cover">
+                未修改
+              </span>
+            </div>
+            <input
+              id="editor-cover"
+              type="text"
+              data-field="cover"
+              placeholder="/skills/example/cover.svg 或 https://…"
+            />
+          </div>
+
+          <div class="editor-field editor-checkbox">
+            <label for="editor-featured">
+              <input id="editor-featured" type="checkbox" data-field="featured" />
+              标记为编辑精选
+            </label>
+            <span class="provenance-badge" data-provenance="featured">
+              未修改
+            </span>
+          </div>
+
+          <fieldset class="editor-field editor-gallery" data-gallery-fieldset>
+            <legend>
+              画廊
+              <span class="provenance-badge" data-provenance="gallery">
+                未修改
+              </span>
+            </legend>
+            <div class="gallery-rows" data-gallery-list></div>
+            <button type="button" class="editor-button editor-button-secondary" data-gallery-add>
+              添加媒体
+            </button>
+          </fieldset>
+        </form>
+
+        <section class="editor-preview" aria-labelledby="preview-heading">
+          <h2 id="preview-heading" class="editor-heading">
+            公开预览
+          </h2>
+          <div class="preview-tabs" role="tablist" aria-label="预览位置">
+            <button type="button" role="tab" data-preview-tab="card" aria-selected="true">
+              首页卡片
+            </button>
+            <button type="button" role="tab" data-preview-tab="detail" aria-selected="false">
+              详情页
+            </button>
+            <button type="button" role="tab" data-preview-tab="mobile" aria-selected="false">
+              移动端
+            </button>
+          </div>
+          <div class="preview-stage">
+            <div data-preview-panel="card">
+              <div class="preview-surface" data-preview-card></div>
+            </div>
+            <div data-preview-panel="detail" hidden>
+              <div class="preview-surface preview-detail" data-preview-detail></div>
+            </div>
+            <div data-preview-panel="mobile" hidden>
+              <div class="mobile-frame">
+                <div class="preview-surface" data-preview-mobile></div>
+              </div>
+            </div>
+          </div>
+          <p class="field-hint">
+            预览复用公开页面的类名与结构，仅以纯文本展示；不渲染或执行上游 Markdown。
+          </p>
+        </section>
+      </div>
+
+      <section class="conflict-panel" data-conflict-panel hidden aria-labelledby="conflict-heading">
+        <h2 id="conflict-heading" class="editor-heading">
+          上游更新与本地修改冲突
+        </h2>
+        <p>
+          来源已有新
+          Commit。以下字段同时存在本地修改与上游变化，必须逐字段选择；在完成选择前不会应用任何更新，也不会静默覆盖。
+        </p>
+        <div data-conflict-list></div>
+        <div class="conflict-actions">
+          <button type="button" class="editor-button" data-apply-conflicts disabled>
+            应用所选字段
+          </button>
+          <button type="button" class="editor-button editor-button-secondary" data-cancel-conflicts>
+            取消更新
+          </button>
+        </div>
+      </section>
+
+      <section class="validation-panel" aria-labelledby="validation-heading">
+        <h2 id="validation-heading" class="editor-heading">
+          发布前校验
+        </h2>
+        <p data-validation-summary class="validation-summary" role="status" aria-live="polite">
+          载入条目后会显示校验结果。
+        </p>
+        <ul class="validation-list" data-validation-list></ul>
+      </section>
+
+      <div class="editor-actions">
+        <button type="button" class="editor-button" data-save-draft>
+          保存草稿
+        </button>
+        <button type="button" class="editor-button editor-button-secondary" data-reset-published>
+          重置为已发布内容
+        </button>
+        <button type="button" class="editor-button editor-button-secondary" data-export-draft>
+          导出更新草稿
+        </button>
+        <span class="publish-placeholder">发布流程将在后续阶段启用；当前只生成本地草稿。</span>
+      </div>
+      <pre class="export-output" data-export-output hidden aria-live="polite"></pre>
+    </section>
+
+    <template data-gallery-template>
+      <div class="gallery-row" data-gallery-row>
+        <div class="editor-two-columns">
+          <label>
+            类型
+            <select data-gallery-field="type">
+              <option value="image">图片</option>
+              <option value="video">视频</option>
+            </select>
+          </label>
+          <label>
+            媒体地址
+            <input type="text" data-gallery-field="src" />
+          </label>
+        </div>
+        <label>
+          替代文本
+          <input type="text" data-gallery-field="alt" />
+        </label>
+        <div class="editor-two-columns">
+          <label>
+            说明
+            <input type="text" data-gallery-field="caption" />
+          </label>
+          <label>
+            归属
+            <input type="text" data-gallery-field="attribution" />
+          </label>
+        </div>
+        <label>
+          媒体来源
+          <input type="text" data-gallery-field="sourceUrl" />
+        </label>
+        <div class="editor-two-columns">
+          <label>
+            对比前
+            <input type="text" data-gallery-field="before" />
+          </label>
+          <label>
+            对比后
+            <input type="text" data-gallery-field="after" />
+          </label>
+        </div>
+        <div class="gallery-row-actions">
+          <button type="button" class="editor-button editor-button-secondary" data-gallery-up>
+            上移
+          </button>
+          <button type="button" class="editor-button editor-button-secondary" data-gallery-down>
+            下移
+          </button>
+          <button type="button" class="editor-button editor-button-danger" data-gallery-remove>
+            移除
+          </button>
+        </div>
+      </div>
+    </template>
+
+    <p class="admin-back-link">
+      <a href="/admin">← 返回管理后台</a>
+    </p>
+  </main>
+</SiteLayout>
+
+<script>
+  import '../../../scripts/admin-editor';
+</script>
+
+<style>
+  .admin-shell {
+    padding-bottom: 74px;
+  }
+
+  .admin-hero {
+    padding-top: 54px;
+  }
+
+  .editor-panel {
+    max-width: 1180px;
+    border: 1px solid #e8e6ed;
+    border-radius: 18px;
+    background: var(--surface);
+    padding: 23px;
+  }
+
+  .editor-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .editor-toolbar label {
+    font-size: 0.85rem;
+    font-weight: 620;
+  }
+
+  .editor-toolbar select {
+    min-height: 42px;
+    min-width: 220px;
+    border: 1px solid #dedce5;
+    border-radius: 11px;
+    background: #fafafa;
+    padding: 0 10px;
+  }
+
+  .editor-status,
+  .draft-note,
+  .publish-placeholder,
+  .field-hint,
+  .conflict-panel p,
+  .validation-summary {
+    margin: 0;
+    color: var(--muted);
+    font-size: 0.8rem;
+    line-height: 1.7;
+  }
+
+  .draft-banner {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+    margin: 12px 0 0;
+    border: 1px solid #e2d8ff;
+    border-radius: 12px;
+    background: #f7f4ff;
+    padding: 11px 13px;
+    font-size: 0.82rem;
+  }
+
+  .editor-layout {
+    display: grid;
+    gap: 26px;
+    margin-top: 20px;
+    grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
+  }
+
+  @media (max-width: 960px) {
+    .editor-layout {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+
+  .editor-heading {
+    margin: 0 0 13px;
+    font-size: 1.05rem;
+  }
+
+  .editor-form {
+    display: grid;
+    gap: 15px;
+  }
+
+  .editor-field {
+    display: grid;
+    gap: 7px;
+    border: 0;
+    margin: 0;
+    padding: 0;
+  }
+
+  .editor-label-row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 10px;
+  }
+
+  .editor-label-row label,
+  .editor-field > label,
+  .editor-field legend {
+    font-size: 0.83rem;
+    font-weight: 620;
+  }
+
+  .editor-field input[type='text'],
+  .editor-field textarea,
+  .editor-field select,
+  .gallery-row input[type='text'],
+  .gallery-row select {
+    width: 100%;
+    border: 1px solid #dedce5;
+    border-radius: 11px;
+    background: #fafafa;
+    padding: 10px 12px;
+    font: inherit;
+    font-size: 0.86rem;
+  }
+
+  .editor-field textarea {
+    resize: vertical;
+  }
+
+  .editor-two-columns {
+    display: grid;
+    gap: 12px;
+    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  }
+
+  .editor-checkbox {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+  }
+
+  .editor-checkbox label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.85rem;
+  }
+
+  .provenance-badge {
+    border-radius: 999px;
+    background: #f0eef7;
+    padding: 3px 9px;
+    color: #6a6b74;
+    font-size: 0.7rem;
+    white-space: nowrap;
+  }
+
+  .provenance-badge[data-state='manual'] {
+    background: #fdeef2;
+    color: #9f2638;
+  }
+
+  .provenance-badge[data-state='published'] {
+    background: #eef4ff;
+    color: #33578f;
+  }
+
+  .gallery-rows {
+    display: grid;
+    gap: 12px;
+  }
+
+  .gallery-row {
+    display: grid;
+    gap: 9px;
+    border: 1px solid #e6e2ee;
+    border-radius: 13px;
+    background: #fff;
+    padding: 13px;
+  }
+
+  .gallery-row label {
+    display: grid;
+    gap: 5px;
+    font-size: 0.78rem;
+    font-weight: 560;
+  }
+
+  .gallery-row-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .editor-button {
+    width: fit-content;
+    min-height: 40px;
+    border: 0;
+    border-radius: 11px;
+    background: var(--accent);
+    padding: 0 15px;
+    color: #fff;
+    font-size: 0.84rem;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .editor-button:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
+
+  .editor-button-secondary {
+    border: 1px solid #ddd6f5;
+    background: #f5f2ff;
+    color: #5138b2;
+  }
+
+  .editor-button-danger {
+    background: #fdeef2;
+    color: #9f2638;
+  }
+
+  .editor-preview {
+    min-width: 0;
+  }
+
+  .preview-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+
+  .preview-tabs button {
+    min-height: 38px;
+    border: 1px solid #dedce5;
+    border-radius: 10px;
+    background: #fafafa;
+    padding: 0 13px;
+    font-size: 0.8rem;
+    cursor: pointer;
+  }
+
+  .preview-tabs button[aria-selected='true'] {
+    border-color: #b7a6ef;
+    background: #f1ecff;
+    color: #5138b2;
+    font-weight: 640;
+  }
+
+  .preview-surface {
+    overflow: hidden;
+    border: 1px dashed #d9d5e4;
+    border-radius: 14px;
+    background: #fbfbfc;
+    padding: 16px;
+  }
+
+  .preview-detail {
+    max-height: 620px;
+    overflow: auto;
+  }
+
+  .mobile-frame {
+    width: 390px;
+    max-width: 100%;
+    border: 8px solid #e4e1ec;
+    border-radius: 26px;
+    background: #fff;
+    padding: 10px;
+  }
+
+  .mobile-frame .preview-surface {
+    border-style: solid;
+  }
+
+  .conflict-panel,
+  .validation-panel {
+    margin-top: 22px;
+    border: 1px solid #e8e6ed;
+    border-radius: 14px;
+    background: #fff;
+    padding: 16px;
+  }
+
+  .conflict-panel {
+    border-color: #f0d7b8;
+    background: #fffaf3;
+  }
+
+  .conflict-item {
+    display: grid;
+    gap: 7px;
+    border-top: 1px solid #eee7dc;
+    padding: 11px 0;
+  }
+
+  .conflict-item:first-child {
+    border-top: 0;
+  }
+
+  .conflict-values {
+    display: grid;
+    gap: 4px;
+    font-size: 0.78rem;
+  }
+
+  .conflict-values code {
+    overflow-wrap: anywhere;
+  }
+
+  .conflict-actions {
+    display: flex;
+    gap: 9px;
+    margin-top: 12px;
+  }
+
+  .validation-list {
+    display: grid;
+    gap: 6px;
+    margin: 10px 0 0;
+    padding-left: 20px;
+  }
+
+  .validation-list li[data-severity='error'] {
+    color: #9f2638;
+  }
+
+  .validation-list li[data-severity='warning'] {
+    color: #8a5a12;
+  }
+
+  .validation-list li[data-severity='ok'] {
+    color: #267447;
+  }
+
+  .editor-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+    margin-top: 22px;
+  }
+
+  .export-output {
+    max-height: 280px;
+    margin: 14px 0 0;
+    overflow: auto;
+    border: 1px solid #e6e2ee;
+    border-radius: 12px;
+    background: #fafafa;
+    padding: 12px;
+    font-size: 0.74rem;
+    line-height: 1.6;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+</style>

@@ -54,7 +54,7 @@ for (const file of htmlFiles) {
 const adminHtmlFiles = htmlFiles.filter((file) =>
   path.relative(outputRoot, file).startsWith(`admin${path.sep}`),
 );
-assert.equal(adminHtmlFiles.length, 2, 'Both protected admin pages must be statically generated.');
+assert.equal(adminHtmlFiles.length, 3, 'All protected admin pages must be statically generated.');
 for (const file of adminHtmlFiles) {
   const html = await readFile(file, 'utf8');
   assert.match(html, /<meta name="robots" content="noindex, nofollow"/);
@@ -65,6 +65,7 @@ assert.ok(robots.includes(`Sitemap: ${siteOrigin}/sitemap-index.xml`));
 assert.ok(robots.includes('Disallow: /admin'));
 assert.ok(robots.includes('Disallow: /api/admin'));
 assert.ok(robots.includes('Disallow: /import-catalog.json'));
+assert.ok(robots.includes('Disallow: /editor-catalog.json'));
 assert.ok(!robots.includes('skills.overme.cn'));
 
 for (const file of sitemapFiles) {
@@ -84,6 +85,10 @@ for (const file of sitemapFiles) {
   assert.ok(
     !sitemap.includes(`${siteOrigin}/import-catalog.json`),
     'Internal source index must not be indexed.',
+  );
+  assert.ok(
+    !sitemap.includes(`${siteOrigin}/editor-catalog.json`),
+    'Editor catalog must not be indexed.',
   );
 }
 

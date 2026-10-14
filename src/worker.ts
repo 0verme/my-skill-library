@@ -35,15 +35,24 @@ export interface WorkerDependencies {
     request: Request,
     environment: WorkerEnvironment,
   ) => Promise<ExistingImportEntry[]>;
+  loadEditorCatalog?: (
+    request: Request,
+    environment: WorkerEnvironment,
+  ) => Promise<Record<string, unknown>[]>;
 }
 
-async function readImportCatalog(request: Request, environment: WorkerEnvironment) {
-  const catalogUrl = new URL('/import-catalog.json', request.url);
+async function readJsonAsset(
+  request: Request,
+  environment: WorkerEnvironment,
+  pathname: string,
+  maxBytes: number,
+): Promise<Record<string, unknown>> {
+  const catalogUrl = new URL(pathname, request.url);
   const response = await environment.ASSETS.fetch(new Request(catalogUrl, { method: 'GET' }));
-  if (!response.ok || !response.body) throw new Error('import_catalog_unavailable');
-  if (Number(response.headers.get('Content-Length')) > 128 * 1024) {
+  if (!response.ok || !response.body) throw new Error('asset_unavailable');
+  if (Number(response.headers.get('Content-Length')) > maxBytes) {
     await response.body.cancel();
-    throw new Error('import_catalog_unavailable');
+    throw new Error('asset_unavailable');
   }
   const reader = response.body.getReader();
   const chunks: Uint8Array[] = [];
@@ -52,9 +61,9 @@ async function readImportCatalog(request: Request, environment: WorkerEnvironmen
     const { done, value } = await reader.read();
     if (done) break;
     size += value.byteLength;
-    if (size > 128 * 1024) {
+    if (size > maxBytes) {
       await reader.cancel();
-      throw new Error('import_catalog_unavailable');
+      throw new Error('asset_unavailable');
     }
     chunks.push(value);
   }
@@ -68,16 +77,41 @@ async function readImportCatalog(request: Request, environment: WorkerEnvironmen
   try {
     value = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes));
   } catch {
-    throw new Error('import_catalog_unavailable');
+    throw new Error('asset_unavailable');
   }
-  if (
-    !value ||
-    typeof value !== 'object' ||
-    !Array.isArray((value as { entries?: unknown }).entries)
-  ) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error('asset_unavailable');
+  }
+  return value as Record<string, unknown>;
+}
+
+async function readImportCatalog(request: Request, environment: WorkerEnvironment) {
+  const value = await readJsonAsset(request, environment, '/import-catalog.json', 128 * 1024);
+  if (!Array.isArray((value as { entries?: unknown }).entries)) {
     throw new Error('import_catalog_unavailable');
   }
   return (value as { entries: ExistingImportEntry[] }).entries;
+}
+
+async function readEditorCatalog(request: Request, environment: WorkerEnvironment) {
+  const value = await readJsonAsset(request, environment, '/editor-catalog.json', 256 * 1024);
+  const entries = (value as { entries?: unknown }).entries;
+  if (!Array.isArray(entries) || entries.length > 500) {
+    throw new Error('editor_catalog_unavailable');
+  }
+  const valid = entries.every((entry) => {
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return false;
+    const record = entry as Record<string, unknown>;
+    return (
+      typeof record.slug === 'string' &&
+      record.slug.length > 0 &&
+      record.fields !== null &&
+      typeof record.fields === 'object' &&
+      !Array.isArray(record.fields)
+    );
+  });
+  if (!valid) throw new Error('editor_catalog_unavailable');
+  return entries as Record<string, unknown>[];
 }
 
 export function createWorkerHandler(dependencies: WorkerDependencies = {}) {
@@ -172,6 +206,16 @@ export function createWorkerHandler(dependencies: WorkerDependencies = {}) {
       }
 
       if (request.method !== 'GET' || url.pathname !== '/api/admin/session') {
+        if (request.method === 'GET' && url.pathname === '/api/admin/editor/catalog') {
+          try {
+            const entries = dependencies.loadEditorCatalog
+              ? await dependencies.loadEditorCatalog(request, environment)
+              : await readEditorCatalog(request, environment);
+            return jsonResponse({ entries }, 200, requestId);
+          } catch {
+            return jsonResponse({ error: 'editor_catalog_unavailable' }, 503, requestId);
+          }
+        }
         return jsonResponse({ error: 'not_found' }, 404, requestId);
       }
       return jsonResponse(

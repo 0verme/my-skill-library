@@ -21,12 +21,16 @@ const description = '受保护地预览 My Skill Library 的公开 GitHub Skill 
       </p>
       <h1 id="admin-title">管理后台</h1>
       <p class="detail-description">
-        预览公开 GitHub Skill 来源。管理员身份由 Cloudflare Access 与 Worker
-        服务端共同验证；页面隐藏不作为安全边界。当前不会保存草稿或发布内容。
+        预览公开 GitHub Skill 来源，并在可视化编辑器中修改已发布条目。管理员身份由 Cloudflare Access
+        与 Worker
+        服务端共同验证；页面隐藏不作为安全边界。草稿只保存在当前浏览器，本阶段不会发布内容。
       </p>
       <div class="detail-actions">
         <a class="action-link" href="/admin/import">
           导入 GitHub Skill <span aria-hidden="true">→</span>
+        </a>
+        <a class="action-link" href="/admin/editor">
+          可视化编辑器 <span aria-hidden="true">→</span>
         </a>
         <a class="action-link" href="/">
           返回公开画廊
@@ -51,12 +55,19 @@ const description = '受保护地预览 My Skill Library 的公开 GitHub Skill 
     <section class="detail-section" aria-labelledby="admin-next-heading">
       <div class="detail-section-heading">
         <h2 id="admin-next-heading">工作区</h2>
-        <p>当前阶段：安全只读导入预览</p>
+        <p>当前阶段：安全只读导入预览与浏览器草稿编辑</p>
       </div>
       <a class="admin-workspace-link" href="/admin/import">
         <span>
           <strong>GitHub Skill 来源预览</strong>
           <small>输入公开仓库、目录或 SKILL.md 链接；默认不全选且不会写入</small>
+        </span>
+        <span aria-hidden="true">→</span>
+      </a>
+      <a class="admin-workspace-link" href="/admin/editor">
+        <span>
+          <strong>可视化编辑器</strong>
+          <small>编辑已发布条目、预览公开卡片与详情页；草稿仅存本浏览器且不包含凭据</small>
         </span>
         <span aria-hidden="true">→</span>
       </a>
@@ -110,6 +121,7 @@ const description = '受保护地预览 My Skill Library 的公开 GitHub Skill 
     background: var(--surface);
     padding: 18px 21px;
     transition: border-color 160ms ease;
+    margin-bottom: 12px;
   }
 
   .admin-workspace-link:hover {

@@ -3,4 +3,5 @@ Allow: /
 Disallow: /admin
 Disallow: /api/admin
 Disallow: /import-catalog.json
+Disallow: /editor-catalog.json
 Sitemap: https://skill.overme.cn/sitemap-index.xml

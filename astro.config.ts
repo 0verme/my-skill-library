@@ -15,7 +15,8 @@ export default defineConfig({
         return (
           pathname !== '/admin' &&
           !pathname.startsWith('/admin/') &&
-          pathname !== '/import-catalog.json'
+          pathname !== '/import-catalog.json' &&
+          pathname !== '/editor-catalog.json'
         );
       },
     }),
