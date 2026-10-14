@@ -212,7 +212,14 @@ export function renderDetailPreview(root: HTMLElement, model: EditorPreviewModel
   article.append(articleHeading);
   const articleBody = document.createElement('article');
   articleBody.className = 'markdown-body';
-  appendText(articleBody, 'p', '编辑器预览不渲染或执行上游 Markdown 正文。');
+  if (model.body.trim()) {
+    const preview = document.createElement('pre');
+    preview.className = 'markdown-preview';
+    preview.textContent = model.body;
+    articleBody.append(preview);
+  } else {
+    appendText(articleBody, 'p', '此条目暂无使用说明正文。');
+  }
   article.append(articleBody);
   columns.append(article);
 

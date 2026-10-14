@@ -42,6 +42,7 @@ import {
   type EditorUpstreamPlan,
 } from '../lib/admin/editor-model.ts';
 import { renderCardPreview, renderDetailPreview } from './editor-preview.ts';
+import type { PublishEntryReport } from '../lib/admin/publish.ts';
 
 const entrySelect = document.querySelector<HTMLSelectElement>('[data-entry-select]');
 const newButton = document.querySelector<HTMLButtonElement>('[data-editor-new]');
@@ -69,6 +70,11 @@ const detailPreviewRoot = document.querySelector<HTMLElement>('[data-preview-det
 const mobilePreviewRoot = document.querySelector<HTMLElement>('[data-preview-mobile]');
 const descriptionCount = document.querySelector<HTMLElement>('[data-description-count]');
 const slugHint = document.querySelector<HTMLElement>('[data-slug-hint]');
+const publishRunButton = document.querySelector<HTMLButtonElement>('[data-publish-run]');
+const publishRefreshButton = document.querySelector<HTMLButtonElement>('[data-publish-refresh]');
+const publishMergeButton = document.querySelector<HTMLButtonElement>('[data-publish-merge]');
+const publishStatusElement = document.querySelector<HTMLElement>('[data-publish-status]');
+const publishStepsElement = document.querySelector<HTMLOListElement>('[data-publish-steps]');
 
 let catalog: EditorCatalogEntry[] = [];
 let draft: EditorDraft | null = null;
@@ -76,6 +82,9 @@ let plan: EditorUpstreamPlan | null = null;
 let lastCandidate: EditorImportCandidate | null = null;
 let pendingRestore: EditorDraft | null = null;
 let lastSavedSlug: string | null = null;
+let publishReport: PublishEntryReport | null = null;
+let publishStale = false;
+let publishBusy = false;
 const decisions = new Map<string, EditorConflictChoice>();
 
 const fieldPaths = [
@@ -88,6 +97,7 @@ const fieldPaths = [
   'prompt',
   'installCommand',
   'cover',
+  'body',
   'featured',
   'status',
   'gallery',
@@ -284,6 +294,8 @@ function openPublishedEntry(slug: string) {
   plan = null;
   lastCandidate = null;
   decisions.clear();
+  publishReport = null;
+  publishStale = false;
   pendingRestore = readStoredDraft(slug);
   if (draftBanner) draftBanner.hidden = !pendingRestore;
   renderAll();
@@ -314,6 +326,8 @@ function openNewDraft() {
   plan = null;
   lastCandidate = null;
   pendingRestore = null;
+  publishReport = null;
+  publishStale = false;
   decisions.clear();
   if (draftBanner) draftBanner.hidden = true;
   if (entrySelect) entrySelect.value = '';
@@ -326,6 +340,8 @@ function openHandoff(candidate: EditorImportCandidate) {
   draft = next;
   lastCandidate = candidate;
   decisions.clear();
+  publishReport = null;
+  publishStale = false;
   plan = buildUpstreamPlan(draft, candidate);
   pendingRestore = readStoredDraft(draft.slug);
   if (draftBanner) draftBanner.hidden = !pendingRestore;
@@ -352,7 +368,9 @@ function renderAll() {
     if (cardPreviewRoot) cardPreviewRoot.textContent = '选择条目后显示首页卡片预览。';
     if (detailPreviewRoot) detailPreviewRoot.textContent = '选择条目后显示详情页预览。';
     if (mobilePreviewRoot) mobilePreviewRoot.textContent = '选择条目后显示移动端预览。';
+    publishReport = null;
     updateReimportState();
+    renderPublishPanel();
     return;
   }
   renderFormValues();
@@ -362,6 +380,7 @@ function renderAll() {
   renderValidation();
   updateReimportState();
   renderConflicts();
+  renderPublishPanel();
 }
 
 function renderFormValues() {
@@ -387,6 +406,8 @@ function renderFormValues() {
         return current.fields.installCommand ?? fallback;
       case 'cover':
         return current.fields.cover ?? fallback;
+      case 'body':
+        return current.fields.body;
       case 'status':
         return current.fields.status;
       default:
@@ -445,35 +466,43 @@ function renderGallery() {
         if (!draft) return;
         const value = input.value;
         draft = updateEditorField(draft, `gallery.${index}.${key}`, value);
+        publishStale = true;
         renderPreview();
         renderValidation();
         renderBadges();
+        renderPublishPanel();
         persist(false);
       });
     }
     row.querySelector('[data-gallery-up]')?.addEventListener('click', () => {
       if (!draft) return;
       draft = moveGalleryItem(draft, index, index - 1);
+      publishStale = true;
       renderGallery();
       renderPreview();
       renderValidation();
+      renderPublishPanel();
       persist(false);
     });
     row.querySelector('[data-gallery-down]')?.addEventListener('click', () => {
       if (!draft) return;
       draft = moveGalleryItem(draft, index, index + 1);
+      publishStale = true;
       renderGallery();
       renderPreview();
       renderValidation();
+      renderPublishPanel();
       persist(false);
     });
     row.querySelector('[data-gallery-remove]')?.addEventListener('click', () => {
       if (!draft) return;
       draft = removeGalleryItem(draft, index);
+      publishStale = true;
       renderGallery();
       renderPreview();
       renderValidation();
       renderBadges();
+      renderPublishPanel();
       persist(false);
     });
     galleryList.append(fragment);
@@ -590,6 +619,299 @@ function updateReimportState() {
   reimportButton.disabled = !draft?.identity.sourceRepo || !draft.identity.sourcePath;
 }
 
+const publishErrorMessages: Record<string, string> = {
+  invalid_publish_request: '发布请求无效，已拒绝。',
+  publish_validation_failed: '发布前校验未通过，请先修复错误。',
+  publish_confirmation_required: '需要明确确认后才能发布。',
+  publish_content_too_large: '发布内容超过大小限制。',
+  publish_license_blocked: '许可未知或限制再分发，不能发布。',
+  publish_github_unconfigured: '服务端尚未配置 GitHub App；无法创建 PR。',
+  publish_pr_conflict: '分支或 PR 冲突，请刷新状态后重试。',
+  publish_not_ready: '发布条件尚未满足。',
+  publish_merge_blocked: '当前不满足受控合并条件。',
+  publish_rate_limited: 'GitHub 已限流，请稍后重试。',
+  publish_github_unavailable: 'GitHub 暂时不可用，请稍后重试。',
+  publish_internal_error: '发布流程出现内部错误，未确认任何写入。',
+  authentication_required: '需要有效的 Access 会话后才能发布。',
+  access_not_configured: '后台 Access 尚未配置，发布被拒绝。',
+  rate_limited: '操作过于频繁，请稍后重试。',
+};
+
+function setPublishMessage(message: string, state: 'info' | 'success' | 'error' = 'info') {
+  if (!publishStatusElement) return;
+  publishStatusElement.textContent = message;
+  publishStatusElement.dataset['state'] = state;
+}
+
+function readPublishReport(payload: Record<string, unknown>): PublishEntryReport | null {
+  const entries = payload.entries;
+  if (!Array.isArray(entries) || entries.length === 0) return null;
+  const first = entries[0];
+  if (!first || typeof first !== 'object' || Array.isArray(first)) return null;
+  const record = first as Record<string, unknown>;
+  if (typeof record.slug !== 'string' || typeof record.stage !== 'string') return null;
+  return record as unknown as PublishEntryReport;
+}
+
+function reportSummary(report: PublishEntryReport): string {
+  const blocked = report.blockedReasons?.join('、');
+  if (report.error) {
+    const retry = report.error.retryAfter ? `（建议等待 ${report.error.retryAfter} 秒）` : '';
+    return `${publishErrorMessages[report.error.code] ?? `发布失败（${report.error.code}）`}${retry}`;
+  }
+  switch (report.stage) {
+    case 'planned':
+      return '尚未创建 PR；可以发布到 PR。';
+    case 'blocked':
+      return `发布被阻止：${blocked ?? '校验或许可未通过'}。`;
+    case 'pr_created':
+      return 'PR 已创建；等待必需检查。';
+    case 'checks_running':
+      return '必需 CI 检查中；PR 创建不等于已上线。';
+    case 'checks_failed':
+      return `必需 CI 失败${report.failingChecks.length ? `（${report.failingChecks.join('、')}）` : ''}；不会自动合并。`;
+    case 'checks_passed':
+      return report.mergeable === true
+        ? '必需 CI 已通过，可以执行受控合并。'
+        : '必需 CI 已通过，但 PR 尚未就绪（无冲突或可合并状态未知）。';
+    case 'merge_conflict':
+      return 'PR 存在合并冲突，需要在 GitHub 处理。';
+    case 'merged':
+      return '已合并；等待 Cloudflare 部署。';
+    case 'deploying':
+      return 'Cloudflare 部署中；完成后新详情页才可访问。';
+    case 'deployed':
+      return 'CI 与 Cloudflare 部署均已成功；已上线。';
+    case 'deploy_failed':
+      return 'Cloudflare 部署失败；不会声称已上线。';
+    default:
+      return `发布状态：${report.stage}`;
+  }
+}
+
+function renderPublishPanel() {
+  const validationErrors = draft
+    ? validateEditorDraft(draft, { forPublish: true }).filter((issue) => issue.severity === 'error')
+    : [];
+  const valid = Boolean(draft) && validationErrors.length === 0;
+  const hasSlug = Boolean(draft?.slug);
+  if (publishRunButton) publishRunButton.disabled = publishBusy || !valid;
+  if (publishRefreshButton) publishRefreshButton.disabled = publishBusy || !hasSlug;
+  const canMerge =
+    !publishBusy &&
+    !publishStale &&
+    valid &&
+    publishReport?.stage === 'checks_passed' &&
+    publishReport?.mergeable === true &&
+    publishReport?.pull?.state === 'open';
+  if (publishMergeButton) publishMergeButton.disabled = !canMerge;
+  if (!publishStepsElement) return;
+  publishStepsElement.replaceChildren();
+  const report = publishReport;
+  const pull = report?.pull ?? null;
+  const checks = report?.checks ?? 'none';
+  const deploy = report?.deploy.state ?? 'unknown';
+  const blocked = report?.stage === 'blocked' || report?.stage === 'failed';
+  const steps: Array<{
+    key: string;
+    label: string;
+    state: 'pending' | 'active' | 'done' | 'failed';
+    href?: string;
+  }> = [
+    {
+      key: 'pr',
+      label: pull ? `PR #${pull.number} 已创建` : '创建/更新中文 PR',
+      state: pull ? 'done' : blocked ? 'failed' : report ? 'active' : 'pending',
+      ...(pull?.url ? { href: pull.url } : {}),
+    },
+    {
+      key: 'checks',
+      label:
+        checks === 'passed'
+          ? '必需 CI 已通过'
+          : checks === 'failed'
+            ? '必需 CI 失败'
+            : checks === 'pending'
+              ? '必需 CI 检查中'
+              : '等待必需 CI',
+      state:
+        checks === 'passed'
+          ? 'done'
+          : checks === 'failed'
+            ? 'failed'
+            : checks === 'pending' || report?.stage === 'pr_created'
+              ? 'active'
+              : 'pending',
+    },
+    {
+      key: 'merge',
+      label: pull?.state === 'merged' ? '已受控合并' : '受控合并',
+      state:
+        pull?.state === 'merged'
+          ? 'done'
+          : report?.stage === 'merge_conflict'
+            ? 'failed'
+            : 'pending',
+    },
+    {
+      key: 'deploy',
+      label:
+        deploy === 'success'
+          ? 'Cloudflare 部署成功'
+          : deploy === 'failure'
+            ? 'Cloudflare 部署失败'
+            : deploy === 'running'
+              ? 'Cloudflare 部署中'
+              : '等待 Cloudflare 部署',
+      state:
+        deploy === 'success'
+          ? 'done'
+          : deploy === 'failure'
+            ? 'failed'
+            : deploy === 'running'
+              ? 'active'
+              : 'pending',
+      ...(report?.deploy.runUrl ? { href: report.deploy.runUrl } : {}),
+    },
+    {
+      key: 'live',
+      label: report?.stage === 'deployed' ? '已上线（新详情页可访问）' : '上线确认',
+      state: report?.stage === 'deployed' ? 'done' : 'pending',
+    },
+  ];
+  for (const step of steps) {
+    const item = document.createElement('li');
+    item.dataset['step'] = step.key;
+    item.dataset['state'] = step.state;
+    item.textContent = step.label;
+    if (step.href) {
+      const link = document.createElement('a');
+      link.href = step.href;
+      link.target = '_blank';
+      link.rel = 'noreferrer';
+      link.textContent = '查看 ↗';
+      item.append(link);
+    }
+    publishStepsElement.append(item);
+  }
+}
+
+async function publishRequest(
+  path: string,
+  body: Record<string, unknown>,
+): Promise<Record<string, unknown>> {
+  const response = await fetch(path, {
+    method: 'POST',
+    credentials: 'same-origin',
+    headers: {
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+      'Idempotency-Key': randomKey(),
+    },
+    body: JSON.stringify(body),
+  });
+  let payload: Record<string, unknown> = {};
+  try {
+    payload = (await response.json()) as Record<string, unknown>;
+  } catch {
+    payload = {};
+  }
+  if (!response.ok) {
+    const code = typeof payload.error === 'string' ? payload.error : 'publish_internal_error';
+    const retryAfter = response.headers.get('Retry-After');
+    const suffix = retryAfter ? ` 建议等待 ${retryAfter} 秒后重试。` : '';
+    throw new Error(`${publishErrorMessages[code] ?? `请求失败（${code}）`}${suffix}`);
+  }
+  return payload;
+}
+
+function publishEntryRequest(current: EditorDraft) {
+  return { slug: current.slug, draft: current, confirmPublish: true };
+}
+
+async function runPublish() {
+  if (!draft || publishBusy) return;
+  const validationErrors = validateEditorDraft(draft, { forPublish: true }).filter(
+    (issue) => issue.severity === 'error',
+  );
+  if (validationErrors.length > 0) {
+    renderValidation();
+    setPublishMessage(`发布前校验未通过：${validationErrors[0]?.message ?? '请修复错误'}`, 'error');
+    return;
+  }
+  publishBusy = true;
+  renderPublishPanel();
+  setPublishMessage('正在通过受保护 API 创建/更新分支与中文 PR…');
+  try {
+    const payload = await publishRequest('/api/admin/publish', {
+      entries: [publishEntryRequest(draft)],
+    });
+    const report = readPublishReport(payload);
+    if (!report) throw new Error('服务端返回了无法解析的发布状态。');
+    publishReport = report;
+    publishStale = false;
+    setPublishMessage(
+      reportSummary(report),
+      report.error || report.stage === 'blocked' || report.stage === 'failed' ? 'error' : 'success',
+    );
+  } catch (error) {
+    setPublishMessage(error instanceof Error ? error.message : '发布请求失败。', 'error');
+  } finally {
+    publishBusy = false;
+    renderPublishPanel();
+  }
+}
+
+async function refreshPublishStatus() {
+  if (!draft || publishBusy || !draft.slug) return;
+  publishBusy = true;
+  renderPublishPanel();
+  setPublishMessage('正在读取 PR / CI / 部署状态…');
+  try {
+    const payload = await publishRequest('/api/admin/publish/status', { slugs: [draft.slug] });
+    const report = readPublishReport(payload);
+    if (!report) throw new Error('服务端返回了无法解析的发布状态。');
+    publishReport = report;
+    setPublishMessage(
+      reportSummary(report),
+      report.stage === 'failed' ||
+        report.stage === 'checks_failed' ||
+        report.stage === 'deploy_failed'
+        ? 'error'
+        : report.stage === 'deployed'
+          ? 'success'
+          : 'info',
+    );
+  } catch (error) {
+    setPublishMessage(error instanceof Error ? error.message : '状态读取失败。', 'error');
+  } finally {
+    publishBusy = false;
+    renderPublishPanel();
+  }
+}
+
+async function runMerge() {
+  if (!draft || publishBusy || !draft.slug) return;
+  publishBusy = true;
+  renderPublishPanel();
+  setPublishMessage('正在服务端重新验证许可、校验、CI 与冲突后执行受控合并…');
+  try {
+    const payload = await publishRequest('/api/admin/publish/merge', {
+      entries: [publishEntryRequest(draft)],
+      confirmAutoMerge: true,
+    });
+    const report = readPublishReport(payload);
+    if (!report) throw new Error('服务端返回了无法解析的合并状态。');
+    publishReport = report;
+    setPublishMessage(reportSummary(report), report.action === 'merged' ? 'success' : 'error');
+  } catch (error) {
+    setPublishMessage(error instanceof Error ? error.message : '合并请求失败。', 'error');
+  } finally {
+    publishBusy = false;
+    renderPublishPanel();
+  }
+}
+
 function applyDomValue(element: HTMLElement, path: string) {
   if (!draft) return;
   let value: unknown;
@@ -612,9 +934,11 @@ function applyDomValue(element: HTMLElement, path: string) {
     descriptionCount.textContent = String(draft.fields.description.length);
   }
   if (path === 'type' || path === 'status') renderFormValues();
+  publishStale = true;
   renderBadges();
   renderPreview();
   renderValidation();
+  renderPublishPanel();
   persist(false);
 }
 
@@ -758,6 +1082,7 @@ function bindStaticEvents() {
     pendingRestore = null;
     if (draftBanner) draftBanner.hidden = true;
     if (lastCandidate) plan = buildUpstreamPlan(draft, lastCandidate);
+    publishStale = true;
     renderAll();
     setStatus('已恢复浏览器草稿；请检查校验与来源差异。', 'info');
   });
@@ -769,11 +1094,15 @@ function bindStaticEvents() {
     setStatus('已丢弃浏览器草稿；当前显示的是已发布内容。', 'info');
   });
   saveButton?.addEventListener('click', () => persist(true));
+  publishRunButton?.addEventListener('click', () => void runPublish());
+  publishRefreshButton?.addEventListener('click', () => void refreshPublishStatus());
+  publishMergeButton?.addEventListener('click', () => void runMerge());
   resetButton?.addEventListener('click', () => {
     if (!draft) return;
     draft = resetEditorDraft(draft);
     plan = null;
     decisions.clear();
+    publishStale = true;
     renderAll();
     persist(false);
     setStatus('已重置为已发布基线；本地修改已清除。', 'info');
@@ -796,6 +1125,7 @@ function bindStaticEvents() {
     plan = null;
     lastCandidate = null;
     decisions.clear();
+    publishStale = true;
     renderAll();
     persist(false);
     setStatus('已按所选字段应用上游更新；本地保留项仍标记为手动修改。', 'success');
@@ -810,10 +1140,12 @@ function bindStaticEvents() {
   galleryAddButton?.addEventListener('click', () => {
     if (!draft) return;
     draft = addGalleryItem(draft);
+    publishStale = true;
     renderGallery();
     renderBadges();
     renderPreview();
     renderValidation();
+    renderPublishPanel();
     persist(false);
   });
   for (const path of fieldPaths) bindFormField(path);

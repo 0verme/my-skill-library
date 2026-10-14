@@ -61,6 +61,7 @@ export async function GET() {
           installCommand,
           cover,
           gallery,
+          body: entry.body ?? '',
           featured,
           status,
         },

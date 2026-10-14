@@ -144,6 +144,9 @@ test('后台页面与管理 API 在 Access 尚未配置时由 Worker fail closed
     '/api/admin/import',
     '/api/admin/import/preview',
     '/api/admin/editor/catalog',
+    '/api/admin/publish',
+    '/api/admin/publish/status',
+    '/api/admin/publish/merge',
     '/api/admin%2Fsession',
   ]) {
     const response = await request.get(path);
@@ -303,6 +306,7 @@ const editorCatalogPayload = {
             attribution: 'Example creator',
           },
         ],
+        body: '## 使用说明\n\n已发布正文。',
         featured: false,
         status: 'verified',
       },
@@ -528,4 +532,152 @@ test('导入页候选交接后在编辑器中按 repo+path 更新原条目而非
   await expect(page.locator('[data-field="name"]')).toHaveValue('上游新名称');
   await expect(page.locator('[data-conflict-panel]')).toBeHidden();
   await expect(page.locator('[data-editor-status]')).toContainText('已按所选字段应用');
+});
+
+test('编辑器发布到 PR，状态逐步推进且 PR 创建不等于上线', async ({ page }) => {
+  await routeEditorPage(page);
+  let published = false;
+  await page.route('**/api/admin/publish', async (route) => {
+    expect(route.request().method()).toBe('POST');
+    expect(route.request().headers()['idempotency-key']).toMatch(/^[A-Za-z0-9_-]{16,128}$/);
+    const body = route.request().postDataJSON() as {
+      entries: Array<{ slug: string; confirmPublish: boolean }>;
+    };
+    expect(body.entries[0]?.slug).toBe('demo-skill');
+    expect(body.entries[0]?.confirmPublish).toBe(true);
+    published = true;
+    return route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        entries: [
+          {
+            slug: 'demo-skill',
+            stage: 'pr_created',
+            pull: {
+              number: 12,
+              url: 'https://github.com/0verme/my-skill-library/pull/12',
+              state: 'open',
+              headSha: 'b'.repeat(40),
+            },
+            mergeable: null,
+            checks: 'none',
+            failingChecks: [],
+            deploy: { state: 'unknown' },
+            updatedAt: new Date().toISOString(),
+            action: 'create',
+          },
+        ],
+      }),
+    });
+  });
+  await page.route('**/api/admin/publish/status', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        entries: [
+          {
+            slug: 'demo-skill',
+            stage: 'checks_passed',
+            pull: {
+              number: 12,
+              url: 'https://github.com/0verme/my-skill-library/pull/12',
+              state: 'open',
+              headSha: 'b'.repeat(40),
+            },
+            mergeable: true,
+            checks: 'passed',
+            failingChecks: [],
+            deploy: { state: 'unknown' },
+            updatedAt: new Date().toISOString(),
+          },
+        ],
+      }),
+    }),
+  );
+  await page.route('**/api/admin/publish/merge', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        entries: [
+          {
+            slug: 'demo-skill',
+            stage: 'deployed',
+            pull: {
+              number: 12,
+              url: 'https://github.com/0verme/my-skill-library/pull/12',
+              state: 'merged',
+              headSha: 'b'.repeat(40),
+            },
+            mergeable: true,
+            checks: 'passed',
+            failingChecks: [],
+            deploy: {
+              state: 'success',
+              runUrl: 'https://github.com/0verme/my-skill-library/actions/runs/1',
+            },
+            updatedAt: new Date().toISOString(),
+            action: 'merged',
+          },
+        ],
+      }),
+    }),
+  );
+
+  await page.goto('/admin/editor');
+  await page.selectOption('[data-entry-select]', 'demo-skill');
+  await expect(page.locator('.publish-panel')).toContainText('PR 创建不等于已上线');
+  const publishButton = page.getByRole('button', { name: '发布到 PR' });
+  await expect(publishButton).toBeEnabled();
+  await publishButton.click();
+  await expect(page.locator('[data-publish-status]')).toContainText('PR 已创建');
+  await expect(page.locator('[data-step="pr"]')).toHaveAttribute('data-state', 'done');
+  await expect(page.locator('[data-step="live"]')).toHaveAttribute('data-state', 'pending');
+  expect(published).toBe(true);
+  const mergeButton = page.getByRole('button', { name: '受控合并' });
+  await expect(mergeButton).toBeDisabled();
+
+  await page.getByRole('button', { name: '刷新状态' }).click();
+  await expect(page.locator('[data-publish-status]')).toContainText('必需 CI 已通过');
+  await expect(mergeButton).toBeEnabled();
+
+  await mergeButton.click();
+  await expect(page.locator('[data-publish-status]')).toContainText('已上线');
+  await expect(page.locator('[data-step="live"]')).toHaveAttribute('data-state', 'done');
+  await expect(page.locator('[data-step="deploy"]')).toHaveAttribute('data-state', 'done');
+  await expect(mergeButton).toBeDisabled();
+});
+
+test('发布被许可或校验门槛阻止时显示错误且不启用合并', async ({ page }) => {
+  await routeEditorPage(page);
+  await page.route('**/api/admin/publish', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        entries: [
+          {
+            slug: 'demo-skill',
+            stage: 'blocked',
+            pull: null,
+            mergeable: null,
+            checks: 'none',
+            failingChecks: [],
+            deploy: { state: 'unknown' },
+            updatedAt: new Date().toISOString(),
+            action: 'blocked',
+            blockedReasons: ['validation_failed', 'license_blocked'],
+          },
+        ],
+      }),
+    }),
+  );
+  await page.goto('/admin/editor');
+  await page.selectOption('[data-entry-select]', 'demo-skill');
+  await page.getByRole('button', { name: '发布到 PR' }).click();
+  await expect(page.locator('[data-publish-status]')).toContainText('发布被阻止');
+  await expect(page.getByRole('button', { name: '受控合并' })).toBeDisabled();
+  await expect(page.locator('[data-step="pr"]')).toHaveAttribute('data-state', 'failed');
 });

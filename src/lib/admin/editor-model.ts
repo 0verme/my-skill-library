@@ -14,6 +14,7 @@ export const EDITOR_DRAFT_STORAGE_PREFIX = 'msl-editor-draft-v1:';
 export const EDITOR_HANDOFF_KEY = 'msl-editor-handoff-v1';
 export const EDITOR_DESCRIPTION_MAX_LENGTH = 220;
 export const EDITOR_NAME_MAX_LENGTH = 120;
+export const EDITOR_BODY_MAX_BYTES = 32 * 1024;
 
 export type EditorSkillType = 'skill' | 'prompt' | 'workflow';
 export type EditorSkillStatus = 'demo' | 'unverified' | 'verified';
@@ -43,6 +44,8 @@ export interface EditorFields {
   installCommand?: string;
   cover?: string;
   gallery: EditorGalleryItem[];
+  /** Published Markdown body (使用说明) maintained in the editor. */
+  body: string;
   featured: boolean;
   status: EditorSkillStatus;
 }
@@ -151,6 +154,7 @@ const DEFAULT_FIELDS: EditorFields = {
   tags: [],
   supportedTools: [],
   gallery: [],
+  body: '',
   featured: false,
   status: 'unverified',
 };
@@ -189,6 +193,7 @@ const EDITABLE_FIELD_KEYS = new Set([
   'prompt',
   'installCommand',
   'cover',
+  'body',
   'featured',
   'status',
 ]);
@@ -323,6 +328,7 @@ export function normalizeEditorFields(
     ...(typeof fields.installCommand === 'string' ? { installCommand: fields.installCommand } : {}),
     ...(typeof fields.cover === 'string' ? { cover: fields.cover } : {}),
     gallery,
+    body: typeof fields.body === 'string' ? fields.body : '',
     featured: fields.featured === true,
     status:
       fields.status === 'demo' || fields.status === 'verified' || fields.status === 'unverified'
@@ -683,6 +689,11 @@ export function validateEditorDraft(
       '安装命令为空时建议直接删除该字段。',
     );
   }
+  if (fields.body.includes('\u0000')) {
+    push('body_invalid', 'error', 'body', '使用说明包含不允许的控制字符。');
+  } else if (new TextEncoder().encode(fields.body).byteLength > EDITOR_BODY_MAX_BYTES) {
+    push('body_too_long', 'error', 'body', '使用说明超过 32 KiB 上限。');
+  }
   if (fields.cover !== undefined && !isSafeMediaSource(fields.cover)) {
     push('cover_unsafe', 'error', 'cover', '封面必须是 /skills/ 站内路径或不含凭据的 HTTPS 链接。');
   }
@@ -737,7 +748,11 @@ export function validateEditorDraft(
   }
   if (options.forPublish) {
     const status = draft.identity.licenseStatus;
-    if (status !== 'original' && status !== 'redistributable' && status !== 'not-applicable') {
+    const hasSource = Boolean(draft.identity.sourceRepo);
+    const allowed = hasSource
+      ? status === 'original' || status === 'redistributable' || status === 'not-applicable'
+      : status === undefined || status === 'original' || status === 'not-applicable';
+    if (!allowed) {
       push(
         'license_not_publishable',
         'error',
@@ -910,6 +925,7 @@ export interface EditorPreviewModel {
   gallery: EditorGalleryItem[];
   prompt?: string;
   installCommand?: string;
+  body: string;
   featured: boolean;
   license?: string;
   licenseStatusLabel?: string;
@@ -937,6 +953,7 @@ export function toEditorPreviewModel(draft: EditorDraft): EditorPreviewModel {
     gallery: cloneFields(draft.fields).gallery,
     ...(draft.fields.prompt ? { prompt: draft.fields.prompt } : {}),
     ...(draft.fields.installCommand ? { installCommand: draft.fields.installCommand } : {}),
+    body: draft.fields.body,
     featured: draft.fields.featured,
     ...(draft.identity.license ? { license: draft.identity.license } : {}),
     ...(draft.identity.licenseStatus

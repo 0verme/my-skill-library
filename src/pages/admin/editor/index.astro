@@ -209,6 +209,17 @@ const description = '在受保护的管理后台可视化编辑 Skill 元数据�
 
           <div class="editor-field">
             <div class="editor-label-row">
+              <label for="editor-body">使用说明（Markdown）</label>
+              <span class="provenance-badge" data-provenance="body">
+                未修改
+              </span>
+            </div>
+            <textarea id="editor-body" rows="8" data-field="body"></textarea>
+            <p class="field-hint">发布时会写入条目 Markdown 正文；不会执行其中的脚本或指令。</p>
+          </div>
+
+          <div class="editor-field">
+            <div class="editor-label-row">
               <label for="editor-cover">封面</label>
               <span class="provenance-badge" data-provenance="cover">
                 未修改
@@ -309,6 +320,37 @@ const description = '在受保护的管理后台可视化编辑 Skill 元数据�
         <ul class="validation-list" data-validation-list></ul>
       </section>
 
+      <section class="publish-panel" data-publish-panel aria-labelledby="publish-heading">
+        <h2 id="publish-heading" class="editor-heading">
+          发布到 PR
+        </h2>
+        <p class="field-hint">
+          发布由服务端 Access 鉴权后创建/更新 `content/&lt;slug&gt;` 分支与中文
+          PR，不会直接部署生产；仅当必需 CI 全绿、PR 无冲突且没有许可/校验门槛时才能受控合并。PR
+          创建不等于已上线。
+        </p>
+        <div class="publish-actions">
+          <button type="button" class="editor-button" data-publish-run disabled>
+            发布到 PR
+          </button>
+          <button
+            type="button"
+            class="editor-button editor-button-secondary"
+            data-publish-refresh
+            disabled
+          >
+            刷新状态
+          </button>
+          <button type="button" class="editor-button" data-publish-merge disabled>
+            受控合并
+          </button>
+        </div>
+        <p class="publish-status" data-publish-status role="status" aria-live="polite">
+          载入条目后可以发布；发布前会再次校验。
+        </p>
+        <ol class="publish-steps" data-publish-steps></ol>
+      </section>
+
       <div class="editor-actions">
         <button type="button" class="editor-button" data-save-draft>
           保存草稿
@@ -319,7 +361,7 @@ const description = '在受保护的管理后台可视化编辑 Skill 元数据�
         <button type="button" class="editor-button editor-button-secondary" data-export-draft>
           导出更新草稿
         </button>
-        <span class="publish-placeholder">发布流程将在后续阶段启用；当前只生成本地草稿。</span>
+        <span class="publish-placeholder">发布使用 Access 鉴权 API；PR 创建不等于已上线。</span>
       </div>
       <pre class="export-output" data-export-output hidden aria-live="polite"></pre>
     </section>
@@ -746,5 +788,78 @@ const description = '在受保护的管理后台可视化编辑 Skill 元数据�
     line-height: 1.6;
     white-space: pre-wrap;
     overflow-wrap: anywhere;
+  }
+
+  .publish-panel {
+    margin-top: 22px;
+    border: 1px solid #e8e6ed;
+    border-radius: 14px;
+    background: #fff;
+    padding: 16px;
+  }
+
+  .publish-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 9px;
+    margin: 13px 0 11px;
+  }
+
+  .publish-status {
+    margin: 0;
+    font-size: 0.82rem;
+    line-height: 1.7;
+    color: #565760;
+    overflow-wrap: anywhere;
+  }
+
+  .publish-status[data-state='error'] {
+    color: #9f2638;
+  }
+
+  .publish-status[data-state='success'] {
+    color: #267447;
+  }
+
+  .publish-steps {
+    display: grid;
+    gap: 7px;
+    margin: 13px 0 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .publish-steps li {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    border: 1px solid #eceae5;
+    border-radius: 10px;
+    padding: 8px 11px;
+    font-size: 0.8rem;
+    color: #6a6b74;
+  }
+
+  .publish-steps li[data-state='active'] {
+    border-color: #b7a6ef;
+    background: #f7f4ff;
+    color: #5138b2;
+  }
+
+  .publish-steps li[data-state='done'] {
+    border-color: #cfe8d8;
+    background: #f3fbf6;
+    color: #267447;
+  }
+
+  .publish-steps li[data-state='failed'] {
+    border-color: #f2d2d8;
+    background: #fdf3f5;
+    color: #9f2638;
+  }
+
+  .publish-steps a {
+    margin-left: auto;
+    font-size: 0.76rem;
   }
 </style>

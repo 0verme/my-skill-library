@@ -36,6 +36,7 @@ npm run test:schema  # Skill 可省略 prompt，Prompt 必须提供 prompt
 npm run test:worker  # Mock Access JWT / JWKS、同源、幂等、限流、GitHub App 安全测试
 npm run test:import  # GitHub URL/ref、frontmatter、许可、路径、限流与资源边界 fixture
 npm run test:editor  # 草稿序列化/凭据拒绝、发布前校验、provenance、逐字段冲突与稳定 slug
+npm run test:publish # 发布校验/幂等计划/受控合并门槛/状态机与 GitHub client 边界
 npm run format:check # Prettier 格式检查
 npm run build        # 生产静态构建，产物在 dist/
 npm run test:seo    # 校验 canonical、OG、sitemap、robots 的正式域名
@@ -113,7 +114,7 @@ Wrangler 会在部署时要求选择/使用当前账号，并输出 Worker 的�
 
 ## 管理后台与外部鉴权
 
-管理页面位于 `/admin`、`/admin/import` 与 `/admin/editor`。生产 Worker 会在返回管理 HTML 或处理 `/api/admin/*` 前，服务端验证 Cloudflare Access JWT 签名、issuer、audience、有效期和管理员邮箱；`workers.dev` 与正式域名复用同一验证。未配置 Access 环境变量时受保护路径默认返回 `503`。Phase 2 仅启用经过同源、幂等键和请求大小校验的公开 GitHub **只读预览** API；Phase 3 增加 `GET /api/admin/editor/catalog` 读取已发布条目，并在 `/admin/editor` 提供可视化编辑、公开语义预览与浏览器本地草稿（不含凭据）。两个阶段都不写内容、不创建分支/PR、不发布。URL、许可证、安全限制和部分错误见 [GitHub 导入安全说明](docs/github-import.md)；草稿、provenance 与逐字段冲突规则见 [可视化编辑器说明](docs/admin-editor.md)。
+管理页面位于 `/admin`、`/admin/import` 与 `/admin/editor`。生产 Worker 会在返回管理 HTML 或处理 `/api/admin/*` 前，服务端验证 Cloudflare Access JWT 签名、issuer、audience、有效期和管理员邮箱；`workers.dev` 与正式域名复用同一验证。未配置 Access 环境变量时受保护路径默认返回 `503`。Phase 2 仅启用经过同源、幂等键和请求大小校验的公开 GitHub **只读预览** API；Phase 3 增加 `GET /api/admin/editor/catalog` 读取已发布条目，并在 `/admin/editor` 提供可视化编辑、公开语义预览与浏览器本地草稿（不含凭据）。Phase 4 增加 Access 鉴权的 `POST /api/admin/publish`、`/api/admin/publish/status` 与 `/api/admin/publish/merge`：由服务端 GitHub App 最小权限创建/更新 `content/<slug>` 分支与中文 PR，仅当必需 CI 全绿、PR 无冲突且无许可/校验门槛时才能显式受控合并；PR 不触发生产部署，合并后仍由既有 main CI 部署。URL、许可证、安全限制见 [GitHub 导入安全说明](docs/github-import.md)；草稿、provenance 与逐字段冲突规则见 [可视化编辑器说明](docs/admin-editor.md)；发布状态机、幂等与自动合并门槛见 [发布管线说明](docs/admin-publish.md)。
 
 真实 Cloudflare Access policy、管理员 allowlist 和 GitHub App 凭据需要仓库/账号管理员在 Cloudflare/GitHub 完成配置；当前没有真实身份集成凭据，Mock 自动化测试不代表生产鉴权或外部 GitHub 网络验证已通过。请按 [管理后台安全配置与最小权限 SOP](docs/admin-security.md) 操作。禁止把 GitHub App 私钥、installation token 或 Access JWT 写入仓库、静态资源、日志或浏览器代码。
 
@@ -123,8 +124,8 @@ Wrangler 会在部署时要求选择/使用当前账号，并输出 Worker 的�
 - `src/pages/skills/[slug].astro`：由 Collection 自动生成的静态详情页
 - `src/pages/admin/`：受 Worker 中间件保护的管理页面（含导入预览与可视化编辑器，并从 Sitemap 排除）
 - `src/worker.ts`、`src/lib/admin/`：Worker 请求路由、Access JWT、CSRF、幂等基础、限流、安全 GitHub API 预览、编辑器目录 API 与服务端 GitHub App 基础
-- `src/scripts/admin-editor.ts`、`src/scripts/editor-preview.ts`：浏览器草稿、字段 provenance/冲突 UI 与公开语义预览
-- `src/lib/admin/editor-model.ts`：草稿序列化、校验、逐字段冲突与快照哈希纯函数
+- `src/scripts/admin-editor.ts`、`src/scripts/editor-preview.ts`：浏览器草稿、字段 provenance/冲突 UI、发布状态面板与公开语义预览
+- `src/lib/admin/editor-model.ts`、`src/lib/admin/publish.ts`、`src/lib/admin/github-publish.ts`：草稿/校验/冲突纯函数、发布计划与状态机、服务端 GitHub App 发布 client
 - `src/content.config.ts`：Zod 内容模型与 URL/媒体路径校验
 - `src/content/skills/`：Markdown 条目
 - `public/skills/`：原创封面与画廊素材
