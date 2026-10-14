@@ -2,7 +2,7 @@
 import SiteLayout from '../../../layouts/SiteLayout.astro';
 import '../../../styles/global.css';
 
-const description = '在受保护的管理后台解析公开 GitHub Skill 来源。';
+const description = '在受保护的管理后台安全预览公开 GitHub Skill 来源。';
 ---
 
 <SiteLayout title="导入 GitHub Skill — My Skill Library" description={description} noindex>
@@ -21,19 +21,19 @@ const description = '在受保护的管理后台解析公开 GitHub Skill 来源
 
     <section class="detail-hero admin-hero" aria-labelledby="import-title">
       <p class="eyebrow">
-        <span class="eyebrow-dot" aria-hidden="true"></span> SAFE IMPORT
+        <span class="eyebrow-dot" aria-hidden="true"></span> SAFE IMPORT PREVIEW
       </p>
       <h1 id="import-title">导入 GitHub Skill</h1>
       <p class="detail-description">
-        仅解析公开 GitHub
-        仓库内容。上游文件是不可执行的不可信数据；未确认转载许可前，只保留来源与自行撰写的说明。
+        仅访问公开 GitHub API，支持仓库、tree 目录与
+        blob/SKILL.md。上游文件始终是不可执行的不可信数据；许可证未知或限制再分发时，只显示来源元数据，不复制正文或媒体。
       </p>
     </section>
 
     <section class="detail-section import-panel" aria-labelledby="source-heading">
       <div class="detail-section-heading">
         <h2 id="source-heading">来源链接</h2>
-        <p>仓库、单个 Skill 目录或 SKILL.md 文件</p>
+        <p>解析有斜杠的 branch/ref、仓库路径和固定 Commit；仅生成预览，不写入仓库。</p>
       </div>
       <form data-import-form>
         <label for="github-source">GitHub URL</label>
@@ -43,20 +43,47 @@ const description = '在受保护的管理后台解析公开 GitHub Skill 来源
           type="url"
           inputmode="url"
           autocomplete="url"
+          maxlength="2048"
           placeholder="https://github.com/owner/repository/tree/main/skills/example"
           aria-describedby="import-help import-status"
-          disabled
+          required
         />
         <p id="import-help" class="import-help">
-          导入解析器将在下一阶段启用。此页面和后续 API 均由 Worker 进行服务端鉴权。
+          可粘贴仓库 URL、`/tree/&lt;ref&gt;/&lt;目录&gt;` 或
+          `/blob/&lt;ref&gt;/&lt;路径&gt;/SKILL.md`。不接受私有仓库、任意外站或访问令牌。
         </p>
-        <button type="button" class="import-button" disabled>
+        <button type="submit" class="import-button" data-import-submit>
           解析来源
         </button>
-        <p id="import-status" class="import-status" role="status" aria-live="polite">
-          导入功能正在开发中；不会在配置缺失时开放写入 API。
+        <p
+          id="import-status"
+          class="import-status"
+          data-import-status
+          role="status"
+          aria-live="polite"
+        >
+          页面与预览 API 均由 Worker 服务端鉴权；真实 Access 未配置时将按设计拒绝访问。
         </p>
       </form>
+
+      <div class="import-results" data-import-results aria-live="polite"></div>
+
+      <section class="selected-preview" data-selected-preview hidden aria-live="polite"></section>
+      <div class="selection-controls">
+        <p data-selection-summary>已选择 0 项。批量选择不会自动全选，也不会写入仓库。</p>
+        <button
+          type="button"
+          class="import-button import-button-secondary"
+          data-preview-selected
+          disabled
+        >
+          预览所选条目
+        </button>
+      </div>
+      <p class="import-disclaimer">
+        当前阶段不保存草稿、不创建分支或
+        PR、不下载媒体、不发布内容。后续编辑/发布仍须明确许可审查、逐条确认并保留本地人工修改。
+      </p>
     </section>
 
     <p class="admin-back-link">
@@ -64,6 +91,10 @@ const description = '在受保护的管理后台解析公开 GitHub Skill 来源
     </p>
   </main>
 </SiteLayout>
+
+<script>
+  import '../../../scripts/admin-import';
+</script>
 
 <style>
   .admin-shell {
@@ -75,7 +106,7 @@ const description = '在受保护的管理后台解析公开 GitHub Skill 来源
   }
 
   .import-panel {
-    max-width: 760px;
+    max-width: 900px;
     border: 1px solid #e8e6ed;
     border-radius: 18px;
     background: var(--surface);
@@ -92,7 +123,7 @@ const description = '在受保护的管理后台解析公开 GitHub Skill 来源
     font-weight: 620;
   }
 
-  input {
+  input[type='url'] {
     width: 100%;
     min-height: 48px;
     border: 1px solid #dedce5;
@@ -101,17 +132,30 @@ const description = '在受保护的管理后台解析公开 GitHub Skill 来源
     padding: 0 14px;
   }
 
-  input:disabled {
-    color: #73747b;
-    cursor: not-allowed;
+  input[type='url']:focus-visible,
+  button:focus-visible,
+  a:focus-visible,
+  input[type='checkbox']:focus-visible {
+    outline: 3px solid #a594ef;
+    outline-offset: 3px;
   }
 
   .import-help,
-  .import-status {
+  .import-status,
+  .import-disclaimer,
+  .selection-controls p {
     margin: 0;
     color: var(--muted);
     font-size: 0.8rem;
     line-height: 1.7;
+  }
+
+  .import-status[data-state='error'] {
+    color: #9f2638;
+  }
+
+  .import-status[data-state='success'] {
+    color: #267447;
   }
 
   .import-button {
@@ -123,11 +167,152 @@ const description = '在受保护的管理后台解析公开 GitHub Skill 来源
     padding: 0 17px;
     color: #fff;
     font-weight: 600;
+    cursor: pointer;
   }
 
   .import-button:disabled {
     opacity: 0.55;
     cursor: not-allowed;
+  }
+
+  .import-button-secondary {
+    border: 1px solid #ddd6f5;
+    background: #f5f2ff;
+    color: #5138b2;
+  }
+
+  .import-results {
+    display: grid;
+    gap: 14px;
+    margin-top: 21px;
+  }
+
+  .import-result-summary {
+    margin: 0;
+    overflow-wrap: anywhere;
+    font-size: 0.84rem;
+    font-weight: 650;
+  }
+
+  .candidate-list {
+    display: grid;
+    gap: 13px;
+  }
+
+  .import-candidate {
+    display: grid;
+    gap: 10px;
+    border: 1px solid #e6e2ee;
+    border-radius: 14px;
+    background: #fff;
+    padding: 16px;
+  }
+
+  .candidate-select {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+  }
+
+  .candidate-select input {
+    width: 18px;
+    height: 18px;
+    accent-color: #6046c4;
+  }
+
+  .candidate-title {
+    margin: 0;
+    font-size: 1.05rem;
+  }
+
+  .candidate-description,
+  .candidate-path {
+    margin: 0;
+    overflow-wrap: anywhere;
+    color: var(--muted);
+    font-size: 0.82rem;
+    line-height: 1.7;
+  }
+
+  .candidate-facts {
+    display: grid;
+    gap: 7px;
+    margin: 0;
+  }
+
+  .candidate-facts > div {
+    display: grid;
+    grid-template-columns: 95px minmax(0, 1fr);
+    gap: 10px;
+    font-size: 0.78rem;
+  }
+
+  .candidate-facts dt {
+    color: var(--muted);
+  }
+
+  .candidate-facts dd {
+    margin: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .candidate-warning,
+  .import-warning-list,
+  .import-error-list {
+    margin: 0;
+    color: #8d4b05;
+    font-size: 0.8rem;
+    line-height: 1.7;
+  }
+
+  .candidate-note {
+    margin: 0;
+    color: #267447;
+    font-size: 0.8rem;
+  }
+
+  .import-error-list {
+    color: #9f2638;
+  }
+
+  .markdown-preview {
+    max-height: 420px;
+    overflow: auto;
+    border: 1px solid #e6e2ee;
+    border-radius: 10px;
+    background: #f8f7fb;
+    padding: 13px;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    font-size: 0.76rem;
+  }
+
+  .selected-preview {
+    margin-top: 16px;
+    border: 1px solid #cfc4f4;
+    border-radius: 13px;
+    background: #faf8ff;
+    padding: 16px;
+  }
+
+  .selected-preview h3,
+  .selected-preview p {
+    margin-top: 0;
+  }
+
+  .selection-controls {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-top: 21px;
+    border-top: 1px solid #ece9f2;
+    padding-top: 17px;
+  }
+
+  .import-disclaimer {
+    margin-top: 14px;
   }
 
   .admin-back-link {
@@ -139,6 +324,10 @@ const description = '在受保护的管理后台解析公开 GitHub Skill 来源
   @media (max-width: 560px) {
     .import-panel {
       padding: 17px;
+    }
+
+    .candidate-facts > div {
+      grid-template-columns: 75px minmax(0, 1fr);
     }
   }
 </style>

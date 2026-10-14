@@ -64,6 +64,7 @@ const robots = await readFile(path.join(outputRoot, 'robots.txt'), 'utf8');
 assert.ok(robots.includes(`Sitemap: ${siteOrigin}/sitemap-index.xml`));
 assert.ok(robots.includes('Disallow: /admin'));
 assert.ok(robots.includes('Disallow: /api/admin'));
+assert.ok(robots.includes('Disallow: /import-catalog.json'));
 assert.ok(!robots.includes('skills.overme.cn'));
 
 for (const file of sitemapFiles) {
@@ -79,6 +80,10 @@ for (const file of sitemapFiles) {
   assert.ok(
     !sitemap.includes(`${siteOrigin}/admin`),
     'Admin routes must not be indexed in sitemap.',
+  );
+  assert.ok(
+    !sitemap.includes(`${siteOrigin}/import-catalog.json`),
+    'Internal source index must not be indexed.',
   );
 }
 

@@ -4,7 +4,7 @@ import { mkdtemp, readFile, rm, unlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 const fixture = path.resolve(`src/content/skills/schema-compat-${process.pid}.md`);
-const baseFrontmatter = `name: Schema compatibility fixture\ndescription: A test Skill without a copied prompt.\ncategory: Test\nstatus: unverified\nsourceRepo: example/skills\nsourcePath: skills/example\nsourceSha: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\nlicenseStatus: unknown\ncreatedAt: 2026-10-14\nupdatedAt: 2026-10-14\ngallery:\n  - type: image\n    src: https://example.org/example.png\n    alt: Example imported media\n    attribution: Example creator\n    sourceUrl: https://example.org/source`;
+const baseFrontmatter = `name: Schema compatibility fixture\ndescription: A test Skill without a copied prompt.\ncategory: Test\nstatus: unverified\nsourceRepo: example/skills\nsourcePath: skills/example\nsourceSha: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\nsourceAttribution: example/skills\nimportedSnapshotHash: bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\nlicenseStatus: unknown\ncreatedAt: 2026-10-14\nupdatedAt: 2026-10-14\ngallery:\n  - type: image\n    src: https://example.org/example.png\n    alt: Example imported media\n    attribution: Example creator\n    sourceUrl: https://example.org/source`;
 
 function runAstroCommand(script, ...args) {
   return spawnSync('npm', ['run', script, ...(args.length ? ['--', ...args] : [])], {
@@ -45,6 +45,7 @@ try {
     );
     assert.ok(detailPage.includes('example/skills'), 'The source repository should be displayed.');
     assert.ok(detailPage.includes('skills/example'), 'The source path should be displayed.');
+    assert.ok(detailPage.includes('example/skills'), 'The source attribution should be displayed.');
     assert.ok(detailPage.includes('许可未知'), 'The unknown license state should be displayed.');
     assert.ok(
       detailPage.includes('Example creator'),

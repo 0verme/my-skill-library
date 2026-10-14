@@ -113,6 +113,11 @@ const skills = defineCollection({
         .string()
         .regex(/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/i, 'Source SHA must be a full Git commit hash.')
         .optional(),
+      sourceAttribution: z.string().min(1).max(240).optional(),
+      importedSnapshotHash: z
+        .string()
+        .regex(/^[a-f0-9]{64}$/i, 'Imported snapshot hash must be a SHA-256 digest.')
+        .optional(),
       skillPath: z
         .string()
         .refine(isSafeRepositoryPath, {

@@ -20,6 +20,7 @@ import {
   type GitHubAppEnvironment,
 } from '../src/lib/admin/github-app.ts';
 import { createWorkerHandler, type WorkerEnvironment } from '../src/worker.ts';
+import type { ExistingImportEntry } from '../src/lib/admin/github-import.ts';
 
 const now = Date.UTC(2026, 9, 14, 12, 0, 0);
 const nowSeconds = Math.floor(now / 1_000);
@@ -80,7 +81,15 @@ function invalidSignatureToken() {
   return `${tokenHeader}.${tokenClaims}.${Buffer.alloc(256, 7).toString('base64url')}`;
 }
 
-function createFixture() {
+function createFixture(
+  options: {
+    fetchGitHub?: typeof fetch;
+    loadImportCatalog?: (
+      request: Request,
+      environment: WorkerEnvironment,
+    ) => Promise<ExistingImportEntry[]>;
+  } = {},
+) {
   let jwksRequests = 0;
   let unavailable = false;
   const fetcher: typeof fetch = async (input) => {
@@ -111,6 +120,8 @@ function createFixture() {
       authenticate,
       allowRequest: createAdminRateLimiter({ limit: 100, writeLimit: 20, now: () => now }),
       makeRequestId: () => 'request-fixture-id',
+      ...(options.fetchGitHub ? { fetchGitHub: options.fetchGitHub } : {}),
+      ...(options.loadImportCatalog ? { loadImportCatalog: options.loadImportCatalog } : {}),
     }),
   };
   return {
@@ -152,7 +163,13 @@ test('管理页面与 API 在正式域名和 workers.dev 均默认拒绝且不�
   const forgedHeader = 'not-a-signed-access-jwt';
 
   for (const host of ['skill.overme.cn', 'my-skill-library.workers.dev']) {
-    for (const path of ['/admin', '/admin/import', '/api/admin/session', '/api/admin/publish']) {
+    for (const path of [
+      '/admin',
+      '/admin/import',
+      '/api/admin/session',
+      '/api/admin/import/preview',
+      '/api/admin/publish',
+    ]) {
       const response = await worker.fetch(
         new Request(`https://${host}${path}`, {
           headers: { 'Cf-Access-Jwt-Assertion': forgedHeader },
@@ -601,4 +618,101 @@ test('GitHub installation token API 请求限定仓库安装及最小权限，�
       return true;
     },
   );
+});
+
+test('导入预览 API 仅在有效 Access、同源、幂等键与静态目录可用时查询 GitHub', async () => {
+  const commit = 'a'.repeat(40);
+  const blob = 'b'.repeat(40);
+  let githubRequests = 0;
+  const fetchGitHub: typeof fetch = async (input) => {
+    githubRequests += 1;
+    const url = input instanceof Request ? input.url : String(input);
+    if (url === 'https://api.github.com/repos/example/skills') {
+      return new Response(JSON.stringify({ default_branch: 'main' }), {
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+    if (url.endsWith('/commits/main')) {
+      return new Response(JSON.stringify({ sha: commit }), {
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+    if (url.endsWith(`/git/trees/${commit}?recursive=1`)) {
+      return new Response(
+        JSON.stringify({
+          truncated: false,
+          tree: [
+            { path: 'skills/demo/SKILL.md', mode: '100644', type: 'blob', sha: blob, size: 80 },
+          ],
+        }),
+        { headers: { 'Content-Type': 'application/json' } },
+      );
+    }
+    assert.fail(`Unexpected GitHub request ${url}`);
+  };
+  const fixture = createFixture({ fetchGitHub, loadImportCatalog: async () => [] });
+  const token = accessToken();
+  const request = (headers: Record<string, string> = {}) =>
+    new Request('https://skill.overme.cn/api/admin/import/preview', {
+      method: 'POST',
+      headers: {
+        'Cf-Access-Jwt-Assertion': token,
+        Origin: 'https://skill.overme.cn',
+        'Sec-Fetch-Site': 'same-origin',
+        'Content-Type': 'application/json',
+        'Idempotency-Key': 'request-key-000001',
+        ...headers,
+      },
+      body: JSON.stringify({ sourceUrl: 'https://github.com/example/skills' }),
+    });
+
+  const crossOrigin = await fixture.worker.fetch(
+    request({ Origin: 'https://evil.example', 'Sec-Fetch-Site': 'cross-site' }),
+    fixture.environment,
+  );
+  assert.equal(crossOrigin.status, 403);
+  assert.equal(githubRequests, 0);
+
+  const missingIdempotency = await fixture.worker.fetch(
+    request({ 'Idempotency-Key': '' }),
+    fixture.environment,
+  );
+  assert.equal(missingIdempotency.status, 400);
+  assert.equal(githubRequests, 0);
+
+  const response = await fixture.worker.fetch(request(), fixture.environment);
+  const responsePayload = await response.clone().json();
+  assert.equal(response.status, 200, JSON.stringify({ payload: responsePayload, githubRequests }));
+  assert.equal(response.headers.get('Cache-Control'), 'no-store, private');
+  assert.equal(response.headers.get('X-Request-ID'), 'request-fixture-id');
+  const payload = await response.json();
+  assert.equal((payload as { candidates: unknown[] }).candidates.length, 1);
+  assert.equal(githubRequests, 3);
+  assert.ok(!JSON.stringify(payload).includes(token));
+
+  const rateLimitFetcher: typeof fetch = async (input) => {
+    const url = input instanceof Request ? input.url : String(input);
+    if (url === 'https://api.github.com/repos/example/skills') {
+      return new Response(JSON.stringify({ default_branch: 'main' }), {
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+    if (url.endsWith('/commits/main')) {
+      return new Response(JSON.stringify({ sha: commit }), {
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+    if (url.includes('/git/trees/')) {
+      return new Response('rate limited', { status: 429, headers: { 'Retry-After': '17' } });
+    }
+    assert.fail(`Unexpected rate-limit fixture request ${url}`);
+  };
+  const rateLimited = createFixture({
+    fetchGitHub: rateLimitFetcher,
+    loadImportCatalog: async () => [],
+  });
+  const limitedResponse = await rateLimited.worker.fetch(request(), rateLimited.environment);
+  assert.equal(limitedResponse.status, 429);
+  assert.equal(limitedResponse.headers.get('Retry-After'), '17');
+  assert.deepEqual(await limitedResponse.json(), { error: 'github_rate_limited' });
 });

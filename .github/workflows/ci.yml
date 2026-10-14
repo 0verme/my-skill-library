@@ -31,6 +31,9 @@ jobs:
       - name: Verify Worker admin authentication and safety
         run: npm run test:worker
 
+      - name: Verify secure GitHub Skill import parsing and limits
+        run: npm run test:import
+
       - name: Check TypeScript and Astro content
         run: npm run check
 

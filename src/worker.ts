@@ -10,8 +10,14 @@ import {
   isAdminApiPath,
   isAdminPagePath,
   jsonResponse,
+  readJsonObject,
 } from './lib/admin/http.ts';
 import type { GitHubAppEnvironment } from './lib/admin/github-app.ts';
+import {
+  discoverGitHubSkills,
+  GitHubImportError,
+  type ExistingImportEntry,
+} from './lib/admin/github-import.ts';
 
 export interface WorkerEnvironment extends AccessEnvironment, GitHubAppEnvironment {
   ASSETS: { fetch(request: Request): Promise<Response> };
@@ -24,6 +30,54 @@ export interface WorkerDependencies {
     category: 'read' | 'write',
   ) => { allowed: boolean; retryAfter: number };
   makeRequestId?: () => string;
+  fetchGitHub?: typeof fetch;
+  loadImportCatalog?: (
+    request: Request,
+    environment: WorkerEnvironment,
+  ) => Promise<ExistingImportEntry[]>;
+}
+
+async function readImportCatalog(request: Request, environment: WorkerEnvironment) {
+  const catalogUrl = new URL('/import-catalog.json', request.url);
+  const response = await environment.ASSETS.fetch(new Request(catalogUrl, { method: 'GET' }));
+  if (!response.ok || !response.body) throw new Error('import_catalog_unavailable');
+  if (Number(response.headers.get('Content-Length')) > 128 * 1024) {
+    await response.body.cancel();
+    throw new Error('import_catalog_unavailable');
+  }
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    size += value.byteLength;
+    if (size > 128 * 1024) {
+      await reader.cancel();
+      throw new Error('import_catalog_unavailable');
+    }
+    chunks.push(value);
+  }
+  const bytes = new Uint8Array(size);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  let value: unknown;
+  try {
+    value = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes));
+  } catch {
+    throw new Error('import_catalog_unavailable');
+  }
+  if (
+    !value ||
+    typeof value !== 'object' ||
+    !Array.isArray((value as { entries?: unknown }).entries)
+  ) {
+    throw new Error('import_catalog_unavailable');
+  }
+  return (value as { entries: ExistingImportEntry[] }).entries;
 }
 
 export function createWorkerHandler(dependencies: WorkerDependencies = {}) {
@@ -75,6 +129,45 @@ export function createWorkerHandler(dependencies: WorkerDependencies = {}) {
             return jsonResponse({ error: error.code }, error.status, requestId);
           }
           return jsonResponse({ error: 'invalid_request' }, 400, requestId);
+        }
+      }
+
+      if (request.method === 'POST' && url.pathname === '/api/admin/import/preview') {
+        try {
+          const input = await readJsonObject(request);
+          if (typeof input.sourceUrl !== 'string') {
+            return jsonResponse({ error: 'invalid_source_url' }, 400, requestId);
+          }
+          let catalog: ExistingImportEntry[];
+          try {
+            catalog = dependencies.loadImportCatalog
+              ? await dependencies.loadImportCatalog(request, environment)
+              : await readImportCatalog(request, environment);
+          } catch {
+            return jsonResponse({ error: 'import_catalog_unavailable' }, 503, requestId);
+          }
+          const preview = await discoverGitHubSkills(input.sourceUrl, {
+            ...(dependencies.fetchGitHub ? { fetcher: dependencies.fetchGitHub } : {}),
+            catalog,
+          });
+          return jsonResponse(preview as unknown as Record<string, unknown>, 200, requestId);
+        } catch (error) {
+          if (error instanceof AdminInputError) {
+            return jsonResponse({ error: error.code }, error.status, requestId);
+          }
+          if (error instanceof GitHubImportError) {
+            const response = jsonResponse({ error: error.code }, error.status, requestId);
+            if (error.retryAfter) response.headers.set('Retry-After', String(error.retryAfter));
+            return response;
+          }
+          console.error(
+            JSON.stringify({
+              event: 'admin_import_preview_failure',
+              name: error instanceof Error ? error.name : 'unknown',
+              requestId,
+            }),
+          );
+          return jsonResponse({ error: 'import_preview_failed' }, 500, requestId);
         }
       }
 
