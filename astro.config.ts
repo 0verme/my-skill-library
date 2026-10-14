@@ -5,7 +5,7 @@ import rehypeSanitize from 'rehype-sanitize';
 import { defineConfig } from 'astro/config';
 
 export default defineConfig({
-  site: 'https://skills.overme.cn',
+  site: 'https://skill.overme.cn',
   output: 'static',
   trailingSlash: 'never',
   integrations: [sitemap()],

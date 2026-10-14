@@ -8,21 +8,22 @@ Astro 以 `output: 'static'` 构建首页、`/skills/<slug>/` 静态详情、404
 
 ## 内容模型
 
-| 字段                                           | 用途                                               |
-| ---------------------------------------------- | -------------------------------------------------- |
-| Markdown 文件名                                | 唯一 slug / 静态详情 URL                           |
-| `name`, `description`                          | 卡片、详情标题与 SEO 摘要                          |
-| `type`, `category`, `tags`                     | Skill / Prompt / Workflow、筛选和推荐              |
-| `cover`, `gallery[]`                           | 可选封面、图片/视频、前后对比、说明和归属          |
-| `supportedTools[]`                             | 声明兼容工具；不代表执行或验证                     |
-| `prompt`                                       | 唯一结构化 Prompt 来源，用于展示和复制             |
-| Markdown 正文                                  | 场景、步骤、注意事项等使用说明，不重复维护 Prompt  |
-| `sourceUrl`, `repoUrl`, `skillPath`, `license` | 可选来源仓库、路径与许可溯源                       |
-| `installCommand`                               | 可选展示/复制的命令；永不自动执行                  |
-| `featured`, `status`                           | 首页精选和 `demo` / `unverified` / `verified` 状态 |
-| `createdAt`, `updatedAt`                       | 来源/更新元数据，为未来导入保留                    |
+| 字段                                                 | 用途                                                     |
+| ---------------------------------------------------- | -------------------------------------------------------- |
+| Markdown 文件名                                      | 唯一 slug / 静态详情 URL                                 |
+| `name`, `description`                                | 卡片、详情标题与 SEO 摘要                                |
+| `type`, `category`, `tags`                           | Skill / Prompt / Workflow、筛选和推荐                    |
+| `cover`, `gallery[]`                                 | 可选封面、图片/视频、前后对比、说明和归属                |
+| `supportedTools[]`                                   | 声明兼容工具；不代表执行或验证                           |
+| `prompt`                                             | Prompt 类型必填；Skill / Workflow 可缺省，用于展示和复制 |
+| Markdown 正文                                        | 场景、步骤、注意事项等使用说明，不重复维护 Prompt        |
+| `sourceUrl`, `sourceRepo`, `sourcePath`, `sourceSha` | 来源链接、GitHub 仓库/路径及解析 Commit SHA              |
+| `license`, `licenseStatus`                           | 许可证名称与再分发状态；未知状态不代表获准转载           |
+| `installCommand`                                     | 可选展示/复制的命令；永不自动执行                        |
+| `featured`, `status`                                 | 首页精选和 `demo` / `unverified` / `verified` 状态       |
+| `createdAt`, `updatedAt`                             | 来源/更新元数据，为未来导入保留                          |
 
-媒体只接受站内 `/skills/` 路径或 HTTPS URL；来源链接只接受 HTTP(S)；仓库路径拒绝绝对路径、反斜杠和 `..` 段。媒体加载失败显示占位。URL Schema 只能校验格式/协议，不能替代内容作者对外部来源、许可和可用性的审核。分类值从当前 Collection 生成，不维护页面级分类清单。
+媒体只接受站内 `/skills/` 路径或 HTTPS URL；来源链接只接受 HTTP(S)；仓库路径拒绝绝对路径、反斜杠和 `..` 段。媒体加载失败显示占位。URL Schema 只能校验格式/协议，不能替代内容作者对外部来源、许可和可用性的审核。来源字段记录仓库、相对路径、Commit SHA 与许可状态；媒体可分别记录来源链接与 attribution，未知许可不能当作再分发授权。分类值从当前 Collection 生成，不维护页面级分类清单。
 
 Markdown HTML 经 `rehype-sanitize` 清理，语法块经 Shiki 构建高亮。站点展示而非解释/执行第三方 Skill；导入流程必须继续使用同一 Zod Schema，并补充来源、许可、媒体和资源限制审查。
 
@@ -44,7 +45,7 @@ Markdown HTML 经 `rehype-sanitize` 清理，语法块经 Shiki 构建高亮。�
 
 ## SEO 和部署
 
-`astro.config.ts` 将站点地址集中设为计划域名 `https://skills.overme.cn`，用于每页 canonical、Open Graph 和 sitemap。`public/robots.txt` 提供 sitemap 地址。该值是未来部署配置，不表示 DNS 已绑定或服务已上线。静态资源使用 `wrangler.jsonc` 的 `assets.directory: './dist'` 与 404 文档回退，开发预览使用 Wrangler，无生产 Worker API。
+`astro.config.ts` 将站点地址集中设为 `https://skill.overme.cn`，用于每页 canonical、Open Graph 和 sitemap；`public/robots.txt` 使用同一 sitemap 地址。配置正确不表示 DNS 已绑定或服务已上线。静态资源使用 `wrangler.jsonc` 的 `assets.directory: './dist'` 与 404 文档回退，开发预览使用 Wrangler，无生产 Worker API。
 
 ## 验证
 

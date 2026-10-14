@@ -28,7 +28,11 @@ const {
   sourceUrl,
   repoUrl,
   skillPath,
+  sourceRepo,
+  sourcePath,
+  sourceSha,
   license,
+  licenseStatus,
   installCommand,
   status,
   createdAt,
@@ -65,6 +69,7 @@ const mediaItems =
             alt: `${name}作品预览`,
             caption: undefined,
             attribution: undefined,
+            sourceUrl: undefined,
           },
         ]
       : [];
@@ -74,6 +79,21 @@ const statusLabels = {
   unverified: '未验证',
   verified: '已验证',
 } as const;
+const licenseStatusLabels = {
+  original: '原创内容声明',
+  redistributable: '已确认可按许可再分发',
+  restricted: '限制再分发',
+  unknown: '许可未知',
+  'not-applicable': '不适用',
+} as const;
+const sourceRepoUrl = sourceRepo ? `https://github.com/${sourceRepo}` : repoUrl;
+const sourcePathValue = sourcePath ?? skillPath;
+const sourceCommitUrl =
+  sourceRepo && sourceSha ? `https://github.com/${sourceRepo}/commit/${sourceSha}` : undefined;
+const sourcePathUrl =
+  sourceRepo && sourcePathValue
+    ? `${sourceRepoUrl}/${sourceSha ? `tree/${sourceSha}` : 'tree/HEAD'}/${sourcePathValue.split('/').map(encodeURIComponent).join('/')}`
+    : undefined;
 const dateFormat = new Intl.DateTimeFormat('zh-CN', {
   year: 'numeric',
   month: 'long',
@@ -110,8 +130,8 @@ const displayDate = (date: Date) => dateFormat.format(date);
       <h1>{name}</h1>
       <p class="detail-description">{description}</p>
       <div class="detail-actions">
-        {repoUrl ? (
-          <a class="action-link" href={repoUrl} target="_blank" rel="noreferrer">
+        {sourceRepoUrl ? (
+          <a class="action-link" href={sourceRepoUrl} target="_blank" rel="noreferrer">
             查看来源仓库 <span aria-hidden="true">↗</span>
           </a>
         ) : null}
@@ -120,16 +140,14 @@ const displayDate = (date: Date) => dateFormat.format(date);
             原始来源 <span aria-hidden="true">↗</span>
           </a>
         ) : null}
-        {!sourceUrl && !repoUrl ? (
-          <span class="action-muted">原创内容模型示例 · 暂无第三方来源</span>
-        ) : null}
+        {!sourceUrl && !sourceRepoUrl ? <span class="action-muted">暂无第三方来源记录</span> : null}
       </div>
     </header>
 
     <section class="detail-section" aria-labelledby="gallery-heading">
       <div class="detail-section-heading">
         <h2 id="gallery-heading">作品画廊</h2>
-        <p>原创示意图 · 并非真实运行截图</p>
+        <p>媒体归属与来源信息以各项说明为准；未标注不代表已获转载授权。</p>
       </div>
       {mediaItems.length > 0 ? (
         <div class="gallery-grid">
@@ -191,10 +209,15 @@ const displayDate = (date: Date) => dateFormat.format(date);
                   </div>
                 </div>
               )}
-              {(item.caption || item.attribution) && (
+              {(item.caption || item.attribution || item.sourceUrl) && (
                 <figcaption class="media-caption">
                   {item.caption && <span>{item.caption}</span>}
                   {item.attribution && <span class="media-attribution">{item.attribution}</span>}
+                  {item.sourceUrl && (
+                    <a href={item.sourceUrl} target="_blank" rel="noreferrer">
+                      媒体来源 ↗
+                    </a>
+                  )}
                 </figcaption>
               )}
             </figure>
@@ -204,7 +227,7 @@ const displayDate = (date: Date) => dateFormat.format(date);
         <div class="gallery-placeholder">
           <div>
             <strong>作品预览稍后补充</strong>
-            <p>这个条目目前没有封面或画廊资源。内容说明与 Prompt 仍可正常查看。</p>
+            <p>这个条目目前没有封面或画廊资源，其余内容说明仍可正常查看。</p>
           </div>
         </div>
       )}
@@ -240,11 +263,35 @@ const displayDate = (date: Date) => dateFormat.format(date);
             <dt>许可证</dt>
             <dd>{license ?? '未提供'}</dd>
           </div>
-          {skillPath && (
+          <div>
+            <dt>许可状态</dt>
+            <dd>{licenseStatus ? licenseStatusLabels[licenseStatus] : '尚未核验'}</dd>
+          </div>
+          {sourcePathValue && (
             <div>
               <dt>来源路径</dt>
               <dd>
-                <code>{skillPath}</code>
+                {sourcePathUrl ? (
+                  <a href={sourcePathUrl} target="_blank" rel="noreferrer">
+                    <code>{sourcePathValue}</code>
+                  </a>
+                ) : (
+                  <code>{sourcePathValue}</code>
+                )}
+              </dd>
+            </div>
+          )}
+          {sourceSha && (
+            <div>
+              <dt>来源 Commit</dt>
+              <dd>
+                {sourceCommitUrl ? (
+                  <a href={sourceCommitUrl} target="_blank" rel="noreferrer">
+                    <code>{sourceSha}</code>
+                  </a>
+                ) : (
+                  <code>{sourceSha}</code>
+                )}
               </dd>
             </div>
           )}
@@ -270,12 +317,12 @@ const displayDate = (date: Date) => dateFormat.format(date);
               </dd>
             </div>
           )}
-          {repoUrl && (
+          {sourceRepoUrl && (
             <div>
               <dt>来源仓库</dt>
               <dd>
-                <a href={repoUrl} target="_blank" rel="noreferrer">
-                  打开仓库 ↗
+                <a href={sourceRepoUrl} target="_blank" rel="noreferrer">
+                  {sourceRepo ?? '打开仓库'} ↗
                 </a>
               </dd>
             </div>
@@ -285,24 +332,26 @@ const displayDate = (date: Date) => dateFormat.format(date);
       </aside>
     </div>
 
-    <section class="prompt-panel" aria-labelledby="prompt-heading">
-      <div class="copy-heading">
-        <div>
-          <h2 id="prompt-heading">完整 Prompt</h2>
-          <span>可复制后按自己的工具与素材调整</span>
+    {prompt && (
+      <section class="prompt-panel" aria-labelledby="prompt-heading">
+        <div class="copy-heading">
+          <div>
+            <h2 id="prompt-heading">完整 Prompt</h2>
+            <span>可复制后按自己的工具与素材调整</span>
+          </div>
+          <button
+            class="copy-button"
+            type="button"
+            data-copy-target="prompt-code"
+            aria-label="复制完整 Prompt"
+          >
+            <span aria-hidden="true">▢</span> 复制 Prompt
+          </button>
         </div>
-        <button
-          class="copy-button"
-          type="button"
-          data-copy-target="prompt-code"
-          aria-label="复制完整 Prompt"
-        >
-          <span aria-hidden="true">▢</span> 复制 Prompt
-        </button>
-      </div>
-      <pre class="prompt-code"><code id="prompt-code">{prompt}</code></pre>
-      <p class="copy-status" data-copy-status aria-live="polite"></p>
-    </section>
+        <pre class="prompt-code"><code id="prompt-code">{prompt}</code></pre>
+        <p class="copy-status" data-copy-status aria-live="polite"></p>
+      </section>
+    )}
 
     {installCommand && (
       <section class="prompt-panel" aria-labelledby="install-heading">

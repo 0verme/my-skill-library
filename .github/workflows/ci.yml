@@ -25,6 +25,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Verify Skill and Prompt schema compatibility
+        run: npm run test:schema
+
       - name: Check TypeScript and Astro content
         run: npm run check
 
@@ -33,6 +36,9 @@ jobs:
 
       - name: Build static site
         run: npm run build
+
+      - name: Validate canonical, Open Graph, sitemap and robots domains
+        run: npm run test:seo
 
       - name: Validate Cloudflare static assets configuration
         run: npm run cf:check

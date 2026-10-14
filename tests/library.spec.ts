@@ -8,7 +8,7 @@ const entries = [
   { slug: 'ui-design-assistant', title: 'UI 设计辅助' },
 ];
 
-test('首页展示四个可访问的原创示例，并能逐个打开详情', async ({ page }) => {
+test('首页展示四个可访问的演示条目，并能逐个打开详情', async ({ page }) => {
   await page.goto('/');
   await expect(page).toHaveTitle(/My Skill Library/);
   await expect(page.getByRole('heading', { level: 1 })).toContainText('好用的 AI Skills');
@@ -58,7 +58,7 @@ test('搜索、分类筛选和无结果状态可用', async ({ page }) => {
   await expect(page.getByRole('heading', { name: '没有找到匹配的作品' })).toBeVisible();
 });
 
-test('详情页包含唯一 SEO 信息，Prompt 可以复制', async ({ page, context }) => {
+test('详情页包含正式域名 SEO 信息，Prompt 可以复制', async ({ page, context }) => {
   await context.grantPermissions(['clipboard-read', 'clipboard-write'], {
     origin: 'http://127.0.0.1:4321',
   });
@@ -68,9 +68,11 @@ test('详情页包含唯一 SEO 信息，Prompt 可以复制', async ({ page, co
   ).toBeVisible();
   await expect(page.getByRole('heading', { name: '使用说明' })).toBeVisible();
   await expect(page.getByRole('heading', { name: '作品画廊' })).toBeVisible();
+  await expect(page.locator('.media-attribution').first()).toHaveText('项目原创 SVG 示意图');
+  await expect(page.getByText('原创内容声明')).toBeVisible();
   await expect(page.locator('link[rel="canonical"]')).toHaveAttribute(
     'href',
-    'https://skills.overme.cn/skills/paper-diorama',
+    'https://skill.overme.cn/skills/paper-diorama',
   );
   await expect(page.locator('meta[property="og:title"]')).toHaveAttribute(
     'content',

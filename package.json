@@ -14,6 +14,8 @@
     "format:check": "prettier --check .",
     "format": "prettier --write .",
     "test:e2e": "playwright test",
+    "test:schema": "node tests/schema-compatibility.mjs",
+    "test:seo": "node tests/seo-check.mjs",
     "cf:check": "wrangler deploy --dry-run",
     "cf:dev": "wrangler dev",
     "deploy": "npm run build && wrangler deploy"
