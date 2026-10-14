@@ -42,3 +42,13 @@ jobs:
 
       - name: Run browser smoke tests
         run: npm run test:e2e
+
+      # PRs validate only; deployment runs solely on a successful push to main.
+      # dist/ is built earlier in this job, so no artifact download is necessary.
+      - name: Deploy Cloudflare Worker
+        if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+        uses: 0verme/ci-workflows/.github/actions/cloudflare-worker-deploy@v1
+        with:
+          working_directory: .
+          api_token: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          account_id: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
