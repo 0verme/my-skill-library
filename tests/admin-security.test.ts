@@ -21,6 +21,13 @@ import {
 } from '../src/lib/admin/github-app.ts';
 import { createWorkerHandler, type WorkerEnvironment } from '../src/worker.ts';
 import type { ExistingImportEntry } from '../src/lib/admin/github-import.ts';
+import {
+  createDraftFromPublished,
+  type EditorCatalogEntry,
+  type EditorDraft,
+} from '../src/lib/admin/editor-model.ts';
+import { PublishError } from '../src/lib/admin/publish.ts';
+import type { GitHubPublishClient } from '../src/lib/admin/github-publish.ts';
 
 const now = Date.UTC(2026, 9, 14, 12, 0, 0);
 const nowSeconds = Math.floor(now / 1_000);
@@ -92,6 +99,7 @@ function createFixture(
       request: Request,
       environment: WorkerEnvironment,
     ) => Promise<Record<string, unknown>[]>;
+    publishClient?: GitHubPublishClient;
   } = {},
 ) {
   let jwksRequests = 0;
@@ -127,6 +135,7 @@ function createFixture(
       ...(options.fetchGitHub ? { fetchGitHub: options.fetchGitHub } : {}),
       ...(options.loadImportCatalog ? { loadImportCatalog: options.loadImportCatalog } : {}),
       ...(options.loadEditorCatalog ? { loadEditorCatalog: options.loadEditorCatalog } : {}),
+      ...(options.publishClient ? { publishClient: options.publishClient } : {}),
     }),
   };
   return {
@@ -335,7 +344,7 @@ test('所有非安全方法要求同源 Origin；恶意跨站写请求被拒绝'
   );
 
   const sameOriginUnknownWrite = await fixture.worker.fetch(
-    new Request('https://skill.overme.cn/api/admin/publish', {
+    new Request('https://skill.overme.cn/api/admin/write-unknown', {
       method: 'POST',
       headers: {
         'Cf-Access-Jwt-Assertion': token,
@@ -347,7 +356,7 @@ test('所有非安全方法要求同源 Origin；恶意跨站写请求被拒绝'
     }),
     fixture.environment,
   );
-  assert.equal(sameOriginUnknownWrite.status, 404, 'No write endpoint is enabled in Phase 1.');
+  assert.equal(sameOriginUnknownWrite.status, 404, 'Unknown write endpoints stay disabled.');
 });
 
 test('同源 mutation 必须提供格式有效的幂等键', () => {
@@ -770,4 +779,360 @@ test('编辑器目录 API 仅在有效 Access 时返回已发布条目，失败�
   );
   assert.equal(wrongMethod.status, 404);
   assert.deepEqual(await wrongMethod.json(), { error: 'not_found' });
+});
+
+const publishSha = 'a'.repeat(40);
+const publishHeadSha = 'b'.repeat(40);
+
+function publishEntryFixture(): EditorCatalogEntry {
+  return {
+    slug: 'demo-skill',
+    identity: {
+      sourceRepo: 'anthropics/skills',
+      sourcePath: 'skills/demo/SKILL.md',
+      sourceSha: publishSha,
+      license: 'Apache-2.0',
+      licenseStatus: 'redistributable',
+      sourceAttribution: 'anthropics/skills',
+      createdAt: '2026-10-01T00:00:00.000Z',
+      updatedAt: '2026-10-10T00:00:00.000Z',
+    },
+    fields: {
+      name: 'Demo Skill',
+      description: '演示简介。',
+      type: 'skill',
+      category: '设计',
+      tags: [],
+      supportedTools: [],
+      gallery: [],
+      body: '## 使用说明\n\n正文。',
+      featured: false,
+      status: 'unverified',
+    },
+  };
+}
+
+function publishDraft(): EditorDraft {
+  return createDraftFromPublished(publishEntryFixture(), new Date(now));
+}
+
+function createFakePublishClient(overrides: Partial<GitHubPublishClient> = {}): {
+  client: GitHubPublishClient;
+  calls: string[];
+} {
+  const calls: string[] = [];
+  const pull = {
+    number: 12,
+    url: 'https://github.com/0verme/my-skill-library/pull/12',
+    state: 'open' as const,
+    headSha: publishHeadSha,
+  };
+  let created = false;
+  let merged = false;
+  const base: GitHubPublishClient = {
+    repository: '0verme/my-skill-library',
+    async getRefSha(ref) {
+      calls.push(`getRefSha:${ref}`);
+      return ref === 'main' ? publishSha : null;
+    },
+    async createRef(branch, sha) {
+      calls.push(`createRef:${branch}:${sha}`);
+    },
+    async getFile(path, ref) {
+      calls.push(`getFile:${path}:${ref}`);
+      return null;
+    },
+    async putFile(input) {
+      calls.push(`putFile:${input.branch}`);
+      return { commitSha: publishHeadSha };
+    },
+    async findPull(headBranch) {
+      calls.push(`findPull:${headBranch}`);
+      return created ? { ...pull, state: merged ? ('merged' as const) : ('open' as const) } : null;
+    },
+    async createPull(input) {
+      calls.push(`createPull:${input.head}`);
+      created = true;
+      return { ...pull };
+    },
+    async getPull(number) {
+      calls.push(`getPull:${number}`);
+      return {
+        pull: { ...pull, state: merged ? ('merged' as const) : ('open' as const) },
+        mergeable: true,
+        ...(merged ? { mergeCommitSha: publishHeadSha } : {}),
+      };
+    },
+    async getChecks() {
+      calls.push('getChecks');
+      return { summary: 'passed', failing: [] };
+    },
+    async getDeployStatus() {
+      calls.push('getDeployStatus');
+      return { state: 'success' };
+    },
+    async mergePull() {
+      calls.push('mergePull');
+      merged = true;
+      return { merged: true, message: 'merged', sha: publishHeadSha };
+    },
+  };
+  return { client: { ...base, ...overrides }, calls };
+}
+
+function publishHeaders(): Record<string, string> {
+  return {
+    'Cf-Access-Jwt-Assertion': accessToken(),
+    Origin: 'https://skill.overme.cn',
+    'Sec-Fetch-Site': 'same-origin',
+    'Content-Type': 'application/json',
+    'Idempotency-Key': 'publish-request-key-01',
+  };
+}
+
+function publishRequest(body: Record<string, unknown>): Request {
+  return new Request('https://skill.overme.cn/api/admin/publish', {
+    method: 'POST',
+    headers: publishHeaders(),
+    body: JSON.stringify(body),
+  });
+}
+
+test('发布 API 需要 Access、同源与幂等键，成功后创建分支与 PR', async () => {
+  const fake = createFakePublishClient();
+  const fixture = createFixture({ publishClient: fake.client });
+  const draft = publishDraft();
+  const body = { entries: [{ slug: draft.slug, draft, confirmPublish: true }] };
+
+  const anonymous = await fixture.worker.fetch(
+    new Request('https://skill.overme.cn/api/admin/publish', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }),
+    fixture.environment,
+  );
+  assert.equal(anonymous.status, 401);
+  assert.deepEqual(await anonymous.json(), { error: 'authentication_required' });
+
+  const crossOrigin = await fixture.worker.fetch(
+    new Request('https://skill.overme.cn/api/admin/publish', {
+      method: 'POST',
+      headers: { ...publishHeaders(), Origin: 'https://evil.example' },
+      body: JSON.stringify(body),
+    }),
+    fixture.environment,
+  );
+  assert.equal(crossOrigin.status, 403);
+  assert.deepEqual(await crossOrigin.json(), { error: 'cross_origin_request' });
+
+  const missingKey = await fixture.worker.fetch(
+    new Request('https://skill.overme.cn/api/admin/publish', {
+      method: 'POST',
+      headers: { ...publishHeaders(), 'Idempotency-Key': '' },
+      body: JSON.stringify(body),
+    }),
+    fixture.environment,
+  );
+  assert.equal(missingKey.status, 400);
+  assert.deepEqual(await missingKey.json(), { error: 'idempotency_key_required' });
+
+  const response = await fixture.worker.fetch(publishRequest(body), fixture.environment);
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get('X-Request-ID'), 'request-fixture-id');
+  const payload = (await response.json()) as { entries: Array<Record<string, unknown>> };
+  assert.equal(payload.entries.length, 1);
+  assert.equal(payload.entries[0]?.['slug'], 'demo-skill');
+  assert.equal(payload.entries[0]?.['stage'], 'checks_passed');
+  assert.equal(payload.entries[0]?.['action'], 'create');
+  assert.ok(fake.calls.includes('createRef:content/demo-skill:' + publishSha));
+  assert.ok(fake.calls.includes('putFile:content/demo-skill'));
+  assert.ok(fake.calls.includes('createPull:content/demo-skill'));
+});
+
+test('受限许可不会写 GitHub，发布被明确阻止', async () => {
+  const fake = createFakePublishClient();
+  const fixture = createFixture({ publishClient: fake.client });
+  const draft = publishDraft();
+  draft.identity.licenseStatus = 'unknown';
+  const response = await fixture.worker.fetch(
+    publishRequest({ entries: [{ slug: draft.slug, draft, confirmPublish: true }] }),
+    fixture.environment,
+  );
+  assert.equal(response.status, 200);
+  const payload = (await response.json()) as { entries: Array<Record<string, unknown>> };
+  assert.equal(payload.entries[0]?.['action'], 'blocked');
+  const reasons = payload.entries[0]?.['blockedReasons'] as string[];
+  assert.ok(reasons.includes('license_blocked'));
+  assert.ok(!fake.calls.some((call) => call.startsWith('createRef')));
+  assert.ok(!fake.calls.some((call) => call.startsWith('putFile')));
+  assert.ok(!fake.calls.some((call) => call.startsWith('createPull')));
+});
+
+test('合并 API 仅在重新验证通过且显式确认后执行', async () => {
+  const pending = createFakePublishClient({
+    async findPull() {
+      return {
+        number: 12,
+        url: 'https://github.com/0verme/my-skill-library/pull/12',
+        state: 'open',
+        headSha: publishHeadSha,
+      };
+    },
+    async getChecks() {
+      return { summary: 'pending', failing: [] };
+    },
+  });
+  const fixture = createFixture({ publishClient: pending.client });
+  const draft = publishDraft();
+  const entry = { slug: draft.slug, draft, confirmPublish: true };
+
+  const notConfirmed = await fixture.worker.fetch(
+    new Request('https://skill.overme.cn/api/admin/publish/merge', {
+      method: 'POST',
+      headers: publishHeaders(),
+      body: JSON.stringify({ entries: [entry] }),
+    }),
+    fixture.environment,
+  );
+  assert.equal(notConfirmed.status, 409);
+  assert.deepEqual(await notConfirmed.json(), { error: 'publish_merge_blocked' });
+
+  const pendingResponse = await fixture.worker.fetch(
+    new Request('https://skill.overme.cn/api/admin/publish/merge', {
+      method: 'POST',
+      headers: publishHeaders(),
+      body: JSON.stringify({ entries: [entry], confirmAutoMerge: true }),
+    }),
+    fixture.environment,
+  );
+  assert.equal(pendingResponse.status, 200);
+  const pendingPayload = (await pendingResponse.json()) as {
+    entries: Array<Record<string, unknown>>;
+  };
+  assert.equal(pendingPayload.entries[0]?.['action'], 'blocked');
+  assert.ok((pendingPayload.entries[0]?.['blockedReasons'] as string[]).includes('checks_pending'));
+  assert.ok(!pending.calls.includes('mergePull'));
+
+  let mergedState = false;
+  const allowed = createFakePublishClient({
+    async findPull() {
+      return {
+        number: 12,
+        url: 'https://github.com/0verme/my-skill-library/pull/12',
+        state: mergedState ? ('merged' as const) : ('open' as const),
+        headSha: publishHeadSha,
+      };
+    },
+    async getPull(number) {
+      return {
+        pull: {
+          number,
+          url: 'https://github.com/0verme/my-skill-library/pull/12',
+          state: mergedState ? ('merged' as const) : ('open' as const),
+          headSha: publishHeadSha,
+        },
+        mergeable: true,
+        ...(mergedState ? { mergeCommitSha: publishHeadSha } : {}),
+      };
+    },
+    async mergePull() {
+      mergedState = true;
+      return { merged: true, message: 'merged', sha: publishHeadSha };
+    },
+  });
+  const allowedFixture = createFixture({ publishClient: allowed.client });
+  const merged = await allowedFixture.worker.fetch(
+    new Request('https://skill.overme.cn/api/admin/publish/merge', {
+      method: 'POST',
+      headers: publishHeaders(),
+      body: JSON.stringify({ entries: [entry], confirmAutoMerge: true }),
+    }),
+    allowedFixture.environment,
+  );
+  assert.equal(merged.status, 200);
+  const mergedPayload = (await merged.json()) as { entries: Array<Record<string, unknown>> };
+  assert.equal(mergedPayload.entries[0]?.['action'], 'merged');
+  assert.equal(mergedPayload.entries[0]?.['stage'], 'deployed');
+  assert.equal(mergedState, true);
+});
+
+test('状态 API 只读返回 PR/检查/部署阶段，并映射限流', async () => {
+  const planned = createFixture({ publishClient: createFakePublishClient().client });
+  const plannedResponse = await planned.worker.fetch(
+    new Request('https://skill.overme.cn/api/admin/publish/status', {
+      method: 'POST',
+      headers: publishHeaders(),
+      body: JSON.stringify({ slugs: ['demo-skill'] }),
+    }),
+    planned.environment,
+  );
+  assert.equal(plannedResponse.status, 200);
+  const plannedPayload = (await plannedResponse.json()) as {
+    entries: Array<Record<string, unknown>>;
+  };
+  assert.equal(plannedPayload.entries[0]?.['stage'], 'planned');
+
+  const mergedClient = createFakePublishClient({
+    async findPull() {
+      return {
+        number: 12,
+        url: 'https://github.com/0verme/my-skill-library/pull/12',
+        state: 'merged',
+        headSha: publishHeadSha,
+      };
+    },
+    async getPull(number) {
+      return {
+        pull: {
+          number,
+          url: 'https://github.com/0verme/my-skill-library/pull/12',
+          state: 'merged',
+          headSha: publishHeadSha,
+        },
+        mergeable: true,
+        mergeCommitSha: publishHeadSha,
+      };
+    },
+  });
+  const mergedFixture = createFixture({ publishClient: mergedClient.client });
+  const deployedResponse = await mergedFixture.worker.fetch(
+    new Request('https://skill.overme.cn/api/admin/publish/status', {
+      method: 'POST',
+      headers: publishHeaders(),
+      body: JSON.stringify({ slugs: ['demo-skill'] }),
+    }),
+    mergedFixture.environment,
+  );
+  const deployedPayload = (await deployedResponse.json()) as {
+    entries: Array<Record<string, unknown>>;
+  };
+  assert.equal(deployedPayload.entries[0]?.['stage'], 'deployed');
+
+  const limitedClient = createFakePublishClient({
+    async getRefSha() {
+      throw new PublishError('publish_rate_limited', 429, { retryAfter: 17 });
+    },
+  });
+  const limitedFixture = createFixture({ publishClient: limitedClient.client });
+  const limitedResponse = await limitedFixture.worker.fetch(
+    publishRequest({
+      entries: [{ slug: 'demo-skill', draft: publishDraft(), confirmPublish: true }],
+    }),
+    limitedFixture.environment,
+  );
+  assert.equal(limitedResponse.status, 429);
+  assert.equal(limitedResponse.headers.get('Retry-After'), '17');
+  assert.deepEqual(await limitedResponse.json(), { error: 'publish_rate_limited' });
+});
+
+test('未配置 GitHub App 时发布端点 fail closed', async () => {
+  const fixture = createFixture();
+  const draft = publishDraft();
+  const response = await fixture.worker.fetch(
+    publishRequest({ entries: [{ slug: draft.slug, draft, confirmPublish: true }] }),
+    fixture.environment,
+  );
+  assert.equal(response.status, 503);
+  assert.deepEqual(await response.json(), { error: 'publish_github_unconfigured' });
 });

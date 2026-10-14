@@ -47,6 +47,7 @@ const publishedFields: EditorFields = {
       sourceUrl: 'https://example.com/source',
     },
   ],
+  body: '## 使用说明\n\n已发布正文。',
   featured: true,
   status: 'verified',
 };
@@ -295,6 +296,7 @@ test('快照哈希稳定且随字段变化', async () => {
       ? { installCommand: draft.fields.installCommand }
       : {}),
     ...(draft.fields.prompt !== undefined ? { prompt: draft.fields.prompt } : {}),
+    body: draft.fields.body,
     supportedTools: draft.fields.supportedTools,
     tags: draft.fields.tags,
     category: draft.fields.category,

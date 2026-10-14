@@ -18,6 +18,7 @@
     "test:worker": "node --experimental-strip-types --test tests/admin-security.test.ts",
     "test:import": "node --experimental-strip-types --test tests/github-import.test.ts",
     "test:editor": "node --experimental-strip-types --test tests/editor-model.test.ts",
+    "test:publish": "node --experimental-strip-types --test tests/publish-model.test.ts tests/publish-github.test.ts",
     "test:seo": "node tests/seo-check.mjs",
     "cf:check": "wrangler deploy --dry-run",
     "cf:dev": "wrangler dev",

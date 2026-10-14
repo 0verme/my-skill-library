@@ -37,6 +37,9 @@ jobs:
       - name: Verify visual editor drafts, provenance and conflict protections
         run: npm run test:editor
 
+      - name: Verify publish validation, state machine and GitHub client safety
+        run: npm run test:publish
+
       - name: Check TypeScript and Astro content
         run: npm run check
 
