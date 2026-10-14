@@ -4,6 +4,7 @@ node_modules/
 # Astro build output
 /dist/
 /.astro/
+/test-results/
 
 # Local tooling and environment
 .env

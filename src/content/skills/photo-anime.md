@@ -23,6 +23,7 @@ prompt: |
 featured: false
 status: demo
 license: 原创演示内容；未声明第三方许可
+licenseStatus: original
 createdAt: 2026-10-14
 updatedAt: 2026-10-14
 ---

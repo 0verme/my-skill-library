@@ -17,6 +17,17 @@ function hasControlCharacters(value: string) {
   });
 }
 
+function isSafeGitHubRepository(value: string) {
+  const [owner, repository, ...rest] = value.split('/');
+  return (
+    rest.length === 0 &&
+    /^[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?$/.test(owner ?? '') &&
+    /^[A-Za-z0-9][A-Za-z0-9_.-]{0,99}$/.test(repository ?? '') &&
+    repository !== '.' &&
+    repository !== '..'
+  );
+}
+
 function isSafeRepositoryPath(value: string) {
   try {
     const decoded = decodeURIComponent(value);
@@ -67,35 +78,66 @@ const galleryItem = z.object({
   before: mediaSource.optional(),
   after: mediaSource.optional(),
   attribution: z.string().optional(),
+  sourceUrl: externalUrl.optional(),
 });
 
 const skills = defineCollection({
   loader: glob({ pattern: '**/*.md', base: './src/content/skills' }),
-  schema: z.object({
-    name: z.string().min(1),
-    description: z.string().min(1).max(220),
-    type: z.enum(['skill', 'prompt', 'workflow']),
-    category: z.string().min(1),
-    tags: z.array(z.string()).default([]),
-    cover: mediaSource.optional(),
-    gallery: z.array(galleryItem).default([]),
-    supportedTools: z.array(z.string()).default([]),
-    prompt: z.string().min(1),
-    sourceUrl: externalUrl.optional(),
-    repoUrl: externalUrl.optional(),
-    skillPath: z
-      .string()
-      .refine(isSafeRepositoryPath, {
-        message: 'Skill path must be a safe repository-relative path.',
-      })
-      .optional(),
-    license: z.string().optional(),
-    installCommand: z.string().min(1).optional(),
-    featured: z.boolean().default(false),
-    status: z.enum(['demo', 'unverified', 'verified']),
-    createdAt: z.coerce.date(),
-    updatedAt: z.coerce.date(),
-  }),
+  schema: z
+    .object({
+      name: z.string().min(1),
+      description: z.string().min(1).max(220),
+      type: z.enum(['skill', 'prompt', 'workflow']),
+      category: z.string().min(1),
+      tags: z.array(z.string()).default([]),
+      cover: mediaSource.optional(),
+      gallery: z.array(galleryItem).default([]),
+      supportedTools: z.array(z.string()).default([]),
+      prompt: z.string().min(1).optional(),
+      sourceUrl: externalUrl.optional(),
+      repoUrl: externalUrl.optional(),
+      sourceRepo: z
+        .string()
+        .refine(
+          isSafeGitHubRepository,
+          'Source repository must use a safe GitHub owner/repo format.',
+        )
+        .optional(),
+      sourcePath: z
+        .string()
+        .refine(isSafeRepositoryPath, {
+          message: 'Source path must be a safe repository-relative path.',
+        })
+        .optional(),
+      sourceSha: z
+        .string()
+        .regex(/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/i, 'Source SHA must be a full Git commit hash.')
+        .optional(),
+      skillPath: z
+        .string()
+        .refine(isSafeRepositoryPath, {
+          message: 'Skill path must be a safe repository-relative path.',
+        })
+        .optional(),
+      license: z.string().optional(),
+      licenseStatus: z
+        .enum(['original', 'redistributable', 'restricted', 'unknown', 'not-applicable'])
+        .optional(),
+      installCommand: z.string().min(1).optional(),
+      featured: z.boolean().default(false),
+      status: z.enum(['demo', 'unverified', 'verified']),
+      createdAt: z.coerce.date(),
+      updatedAt: z.coerce.date(),
+    })
+    .superRefine((entry, context) => {
+      if (entry.type === 'prompt' && !entry.prompt) {
+        context.addIssue({
+          code: 'custom',
+          path: ['prompt'],
+          message: 'Prompt entries must include a non-empty prompt field.',
+        });
+      }
+    }),
 });
 
 export const collections = { skills };
