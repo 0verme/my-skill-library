@@ -88,6 +88,10 @@ function createFixture(
       request: Request,
       environment: WorkerEnvironment,
     ) => Promise<ExistingImportEntry[]>;
+    loadEditorCatalog?: (
+      request: Request,
+      environment: WorkerEnvironment,
+    ) => Promise<Record<string, unknown>[]>;
   } = {},
 ) {
   let jwksRequests = 0;
@@ -122,6 +126,7 @@ function createFixture(
       makeRequestId: () => 'request-fixture-id',
       ...(options.fetchGitHub ? { fetchGitHub: options.fetchGitHub } : {}),
       ...(options.loadImportCatalog ? { loadImportCatalog: options.loadImportCatalog } : {}),
+      ...(options.loadEditorCatalog ? { loadEditorCatalog: options.loadEditorCatalog } : {}),
     }),
   };
   return {
@@ -715,4 +720,54 @@ test('导入预览 API 仅在有效 Access、同源、幂等键与静态目录�
   assert.equal(limitedResponse.status, 429);
   assert.equal(limitedResponse.headers.get('Retry-After'), '17');
   assert.deepEqual(await limitedResponse.json(), { error: 'github_rate_limited' });
+});
+
+test('编辑器目录 API 仅在有效 Access 时返回已发布条目，失败时 fail closed', async () => {
+  const entries = [{ slug: 'demo-skill', identity: {}, fields: { name: 'Demo' } }];
+  const fixture = createFixture({ loadEditorCatalog: async () => entries });
+  const token = accessToken();
+  const catalogRequest = () =>
+    new Request('https://skill.overme.cn/api/admin/editor/catalog', {
+      headers: { 'Cf-Access-Jwt-Assertion': token },
+    });
+
+  const anonymous = await fixture.worker.fetch(
+    new Request('https://skill.overme.cn/api/admin/editor/catalog'),
+    fixture.environment,
+  );
+  assert.equal(anonymous.status, 401);
+  assert.deepEqual(await anonymous.json(), { error: 'authentication_required' });
+
+  const response = await fixture.worker.fetch(catalogRequest(), fixture.environment);
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get('Cache-Control'), 'no-store, private');
+  assert.equal(response.headers.get('Content-Type'), 'application/json; charset=utf-8');
+  assert.equal(response.headers.get('X-Request-ID'), 'request-fixture-id');
+  assert.deepEqual(await response.json(), { entries });
+
+  const failing = createFixture({
+    loadEditorCatalog: async () => {
+      throw new Error('fixture editor catalog failure');
+    },
+  });
+  const failingResponse = await failing.worker.fetch(catalogRequest(), failing.environment);
+  assert.equal(failingResponse.status, 503);
+  assert.deepEqual(await failingResponse.json(), { error: 'editor_catalog_unavailable' });
+
+  const wrongMethod = await fixture.worker.fetch(
+    new Request('https://skill.overme.cn/api/admin/editor/catalog', {
+      method: 'POST',
+      headers: {
+        'Cf-Access-Jwt-Assertion': token,
+        Origin: 'https://skill.overme.cn',
+        'Sec-Fetch-Site': 'same-origin',
+        'Content-Type': 'application/json',
+        'Idempotency-Key': 'editor-catalog-key-01',
+      },
+      body: '{}',
+    }),
+    fixture.environment,
+  );
+  assert.equal(wrongMethod.status, 404);
+  assert.deepEqual(await wrongMethod.json(), { error: 'not_found' });
 });

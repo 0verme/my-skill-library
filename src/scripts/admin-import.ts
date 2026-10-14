@@ -1,3 +1,9 @@
+import {
+  containsCredentialLikeKeys,
+  EDITOR_HANDOFF_KEY,
+  type EditorImportCandidate,
+} from '../lib/admin/editor-model.ts';
+
 interface ImportCandidate {
   sourceRepo: string;
   sourcePath: string;
@@ -291,9 +297,46 @@ function showSelectedPreview(selectedCandidates: Map<string, ImportCandidate>) {
   for (const candidate of selectedCandidates.values()) {
     const item = document.createElement('li');
     item.textContent = `${candidate.name} — ${candidate.sourceRepo}/${candidate.sourcePath} — ${candidate.licenseStatus}`;
+    const openButton = document.createElement('button');
+    openButton.type = 'button';
+    openButton.className = 'import-button import-button-secondary';
+    openButton.textContent = '在编辑器中打开';
+    openButton.addEventListener('click', () => openInEditor(candidate, openButton));
+    item.append(openButton);
     list.append(item);
   }
   selectedPreview.append(list);
+}
+
+function openInEditor(candidate: ImportCandidate, button: HTMLButtonElement) {
+  const handoff: EditorImportCandidate = {
+    sourceRepo: candidate.sourceRepo,
+    sourcePath: candidate.sourcePath,
+    sourceSha: candidate.sourceSha,
+    sourceAttribution: candidate.sourceAttribution,
+    license: candidate.license,
+    licenseStatus: candidate.licenseStatus,
+    name: candidate.name,
+    description: candidate.description,
+    suggestedSlug: candidate.suggestedSlug,
+  };
+  if (containsCredentialLikeKeys(handoff)) {
+    button.disabled = true;
+    return;
+  }
+  try {
+    localStorage.setItem(
+      EDITOR_HANDOFF_KEY,
+      JSON.stringify({ schemaVersion: 1, candidate: handoff }),
+    );
+  } catch {
+    if (status) {
+      status.textContent = '无法在当前浏览器保存编辑器交接数据；请检查隐私设置后重试。';
+      status.dataset.state = 'error';
+    }
+    return;
+  }
+  window.location.assign('/admin/editor');
 }
 
 async function parseSource() {
