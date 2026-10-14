@@ -1,0 +1,24 @@
+---
+import SiteLayout from '../layouts/SiteLayout.astro';
+import '../styles/global.css';
+---
+
+<SiteLayout
+  title="页面未找到 — My Skill Library"
+  description="你访问的页面不存在，回到作品画廊继续浏览。"
+>
+  <main id="main-content" class="page-shell detail-page">
+    <div class="gallery-placeholder" style="min-height: 54vh">
+      <div>
+        <span class="section-kicker">404 · LOST IN THE LIBRARY</span>
+        <h1 style="margin: 16px 0 8px; font-size: clamp(2rem, 6vw, 3.5rem); letter-spacing: -0.06em">
+          页面未找到
+        </h1>
+        <p>这页暂时没有被收录。回到作品画廊，看看有没有新的灵感。</p>
+        <a class="action-link" style="margin-top: 22px" href="/">
+          返回首页 <span aria-hidden="true">→</span>
+        </a>
+      </div>
+    </div>
+  </main>
+</SiteLayout>

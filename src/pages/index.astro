@@ -1,0 +1,109 @@
+---
+import SkillCard from '../components/SkillCard.astro';
+import SiteLayout from '../layouts/SiteLayout.astro';
+import '../styles/global.css';
+import { getCollection } from 'astro:content';
+
+const skills = await getCollection('skills');
+const orderedSkills = [...skills].sort(
+  (a, b) =>
+    Number(b.data.featured) - Number(a.data.featured) ||
+    a.data.name.localeCompare(b.data.name, 'zh-CN'),
+);
+const categories = [...new Set(skills.map((skill) => skill.data.category))].sort((a, b) =>
+  a.localeCompare(b, 'zh-CN'),
+);
+const description =
+  '一个由 Markdown 驱动的个人 AI Skills、Prompts 与 Workflows 展示馆。浏览原创示例、查看提示词，并按需扩充自己的收藏。';
+---
+
+<SiteLayout title="My Skill Library — AI Skills 与 Prompt 作品集" description={description}>
+  <main id="main-content">
+    <section class="hero page-shell" aria-labelledby="hero-title">
+      <div class="hero-content">
+        <p class="eyebrow">
+          <span class="eyebrow-dot" aria-hidden="true"></span> A small collection, thoughtfully made
+        </p>
+        <h1 id="hero-title">
+          好用的 AI Skills，
+          <br />
+          <span>做成看得见的作品。</span>
+        </h1>
+        <p class="hero-description">
+          收藏有灵感的 Skill、Prompt 与
+          Workflow。这里的卡片和插图是原创演示内容，先看作品，再决定要不要带走它的想法。
+        </p>
+        <div class="search-wrap">
+          <label class="sr-only" for="library-search">
+            搜索作品、分类或标签
+          </label>
+          <svg class="search-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <circle cx="10.8" cy="10.8" r="6.8" stroke="currentColor" stroke-width="1.7" />
+            <path
+              d="m16 16 4.2 4.2"
+              stroke="currentColor"
+              stroke-width="1.7"
+              stroke-linecap="round"
+            />
+          </svg>
+          <input
+            id="library-search"
+            type="search"
+            placeholder="搜索作品、分类或标签…"
+            autocomplete="off"
+          />
+          <button class="search-clear" id="search-clear" type="button" aria-label="清除搜索" hidden>
+            清除
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <section class="library-section page-shell" id="library" aria-labelledby="library-heading">
+      <div class="section-heading">
+        <div class="section-title-wrap">
+          <p class="section-kicker">COLLECTED WORKS · {String(skills.length).padStart(2, '0')}</p>
+          <h2 id="library-heading">精选与新作</h2>
+        </div>
+        <p class="section-note">每一张卡片，都是一扇详情页</p>
+      </div>
+
+      <div class="filter-row" role="group" aria-label="按分类筛选作品">
+        <button class="filter-button" type="button" data-category-filter="all" aria-pressed="true">
+          全部
+        </button>
+        {categories.map((category) => (
+          <button
+            class="filter-button"
+            type="button"
+            data-category-filter={category}
+            aria-pressed="false"
+          >
+            {category}
+          </button>
+        ))}
+      </div>
+
+      <div class="skill-grid" id="skill-grid">
+        {orderedSkills.map((entry) => (
+          <SkillCard entry={entry} featured={entry.data.featured} />
+        ))}
+      </div>
+      <p class="result-count" id="result-count" aria-live="polite">
+        共 {skills.length} 个作品
+      </p>
+
+      <div class="empty-state" id="empty-state" hidden>
+        <div class="empty-state-icon" aria-hidden="true">
+          ⌕
+        </div>
+        <h3>没有找到匹配的作品</h3>
+        <p>换个关键词，或清除筛选条件再看看。</p>
+      </div>
+    </section>
+  </main>
+  <script>
+    import '../scripts/gallery';
+    import '../scripts/media-fallback';
+  </script>
+</SiteLayout>

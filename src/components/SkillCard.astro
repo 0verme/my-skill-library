@@ -1,0 +1,67 @@
+---
+import type { CollectionEntry } from 'astro:content';
+
+interface Props {
+  entry: CollectionEntry<'skills'>;
+  featured?: boolean;
+}
+
+const { entry, featured = false } = Astro.props;
+const { name, description, type, category, tags, cover, status } = entry.data;
+const typeLabels = { skill: 'Skill', prompt: 'Prompt', workflow: 'Workflow' } as const;
+const statusLabels = { demo: '示例', unverified: '未验证', verified: '已验证' } as const;
+const searchText = [name, description, category, typeLabels[type], ...tags]
+  .join(' ')
+  .toLocaleLowerCase('zh-CN');
+---
+
+<a
+  class:list={['skill-card', { 'skill-card-featured': featured }]}
+  href={`/skills/${entry.id}`}
+  data-card
+  data-category={category}
+  data-type={type}
+  data-search={searchText}
+  aria-label={`查看${name}：${description}`}
+>
+  <div class="card-art" data-media-frame>
+    {cover ? (
+      <>
+        <img
+          src={cover}
+          alt={`${name}原创示意图`}
+          width="1200"
+          height="900"
+          loading="lazy"
+          decoding="async"
+          data-fallback-image
+        />
+        <div class="media-fallback card-fallback" data-image-fallback hidden aria-hidden="true">
+          <span>预览暂不可用</span>
+        </div>
+      </>
+    ) : (
+      <div class="card-fallback card-fallback-visible" aria-hidden="true">
+        <span>暂无作品预览</span>
+      </div>
+    )}
+    {featured && <span class="featured-stamp">编辑精选</span>}
+    <span class="card-open" aria-hidden="true">
+      ↗
+    </span>
+  </div>
+  <div class="card-copy">
+    <div class="card-meta">
+      <span class="category-label">{category}</span>
+      <span class="type-label">{typeLabels[type]}</span>
+    </div>
+    <h3>{name}</h3>
+    <p>{description}</p>
+    <div class="card-bottom">
+      <span class={`status-pill status-${status}`}>{statusLabels[status]}</span>
+      <span class="card-detail">
+        查看详情 <span aria-hidden="true">→</span>
+      </span>
+    </div>
+  </div>
+</a>

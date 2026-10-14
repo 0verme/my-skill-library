@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://skills.overme.cn/sitemap-index.xml

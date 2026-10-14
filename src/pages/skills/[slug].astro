@@ -1,0 +1,374 @@
+---
+import { getCollection, render, type CollectionEntry } from 'astro:content';
+import SkillCard from '../../components/SkillCard.astro';
+import SiteLayout from '../../layouts/SiteLayout.astro';
+import '../../styles/global.css';
+
+export async function getStaticPaths() {
+  const entries = await getCollection('skills');
+  return entries.map((entry) => ({ params: { slug: entry.id }, props: { entry } }));
+}
+
+interface Props {
+  entry: CollectionEntry<'skills'>;
+}
+
+const { entry } = Astro.props;
+const { Content } = await render(entry);
+const {
+  name,
+  description,
+  type,
+  category,
+  tags,
+  cover,
+  gallery,
+  supportedTools,
+  prompt,
+  sourceUrl,
+  repoUrl,
+  skillPath,
+  license,
+  installCommand,
+  status,
+  createdAt,
+  updatedAt,
+} = entry.data;
+const allSkills = await getCollection('skills');
+const orderedSkills = [...allSkills].sort((a, b) =>
+  a.data.name.localeCompare(b.data.name, 'zh-CN'),
+);
+const currentIndex = orderedSkills.findIndex((skill) => skill.id === entry.id);
+const previousSkill = currentIndex > 0 ? orderedSkills[currentIndex - 1] : undefined;
+const nextSkill =
+  currentIndex >= 0 && currentIndex < orderedSkills.length - 1
+    ? orderedSkills[currentIndex + 1]
+    : undefined;
+const relatedSkills = allSkills
+  .filter((skill) => skill.id !== entry.id)
+  .map((skill) => ({
+    skill,
+    score: Number(skill.data.category === category) * 2 + Number(skill.data.type === type),
+  }))
+  .filter((item) => item.score > 0)
+  .sort((a, b) => b.score - a.score || a.skill.data.name.localeCompare(b.skill.data.name, 'zh-CN'))
+  .slice(0, 2)
+  .map((item) => item.skill);
+const mediaItems =
+  gallery.length > 0
+    ? gallery
+    : cover
+      ? [
+          {
+            type: 'image' as const,
+            src: cover,
+            alt: `${name}作品预览`,
+            caption: undefined,
+            attribution: undefined,
+          },
+        ]
+      : [];
+const typeLabels = { skill: 'Skill', prompt: 'Prompt', workflow: 'Workflow' } as const;
+const statusLabels = {
+  demo: '示例 · 未声称真实运行',
+  unverified: '未验证',
+  verified: '已验证',
+} as const;
+const dateFormat = new Intl.DateTimeFormat('zh-CN', {
+  year: 'numeric',
+  month: 'long',
+  day: 'numeric',
+});
+const displayDate = (date: Date) => dateFormat.format(date);
+---
+
+<SiteLayout
+  title={`${name} — My Skill Library`}
+  description={description}
+  ogImage={cover ?? '/og/library.svg'}
+  ogType="article"
+>
+  <main id="main-content" class="page-shell detail-page">
+    <nav class="breadcrumbs" aria-label="面包屑">
+      <a href="/">首页</a>
+      <span class="breadcrumb-separator" aria-hidden="true">
+        /
+      </span>
+      <a href="/#library">作品画廊</a>
+      <span class="breadcrumb-separator" aria-hidden="true">
+        /
+      </span>
+      <span aria-current="page">{name}</span>
+    </nav>
+
+    <header class="detail-hero">
+      <div class="detail-meta">
+        <span class="category-label">{category}</span>
+        <span class="type-label">{typeLabels[type]}</span>
+        <span class={`status-pill status-${status}`}>{statusLabels[status]}</span>
+      </div>
+      <h1>{name}</h1>
+      <p class="detail-description">{description}</p>
+      <div class="detail-actions">
+        {repoUrl ? (
+          <a class="action-link" href={repoUrl} target="_blank" rel="noreferrer">
+            查看来源仓库 <span aria-hidden="true">↗</span>
+          </a>
+        ) : null}
+        {sourceUrl ? (
+          <a class="action-link" href={sourceUrl} target="_blank" rel="noreferrer">
+            原始来源 <span aria-hidden="true">↗</span>
+          </a>
+        ) : null}
+        {!sourceUrl && !repoUrl ? (
+          <span class="action-muted">原创内容模型示例 · 暂无第三方来源</span>
+        ) : null}
+      </div>
+    </header>
+
+    <section class="detail-section" aria-labelledby="gallery-heading">
+      <div class="detail-section-heading">
+        <h2 id="gallery-heading">作品画廊</h2>
+        <p>原创示意图 · 并非真实运行截图</p>
+      </div>
+      {mediaItems.length > 0 ? (
+        <div class="gallery-grid">
+          {mediaItems.map((item) => (
+            <figure class="gallery-item">
+              {item.type === 'video' ? (
+                <div class="media-frame" data-media-frame>
+                  <video
+                    src={item.src}
+                    poster={cover}
+                    controls
+                    playsinline
+                    preload="metadata"
+                    width="1200"
+                    height="900"
+                    aria-label={item.alt}
+                    data-fallback-video
+                  ></video>
+                  <div class="media-fallback" data-image-fallback hidden role="status">
+                    视频暂时无法预览
+                  </div>
+                </div>
+              ) : item.before && item.after ? (
+                <div class="media-comparison" aria-label="前后对比示意">
+                  {[
+                    { src: item.before, label: '参考方向' },
+                    { src: item.after, label: '风格示意' },
+                  ].map((sample) => (
+                    <div class="comparison-panel" data-media-frame>
+                      <img
+                        src={sample.src}
+                        alt={`${item.alt}：${sample.label}`}
+                        width="900"
+                        height="760"
+                        loading="lazy"
+                        decoding="async"
+                        data-fallback-image
+                      />
+                      <div class="media-fallback" data-image-fallback hidden role="status">
+                        图片暂时无法预览
+                      </div>
+                      <span class="comparison-label">{sample.label}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div class="media-frame" data-media-frame>
+                  <img
+                    src={item.src}
+                    alt={item.alt}
+                    width="1200"
+                    height="900"
+                    loading="lazy"
+                    decoding="async"
+                    data-fallback-image
+                  />
+                  <div class="media-fallback" data-image-fallback hidden role="status">
+                    图片暂时无法预览
+                  </div>
+                </div>
+              )}
+              {(item.caption || item.attribution) && (
+                <figcaption class="media-caption">
+                  {item.caption && <span>{item.caption}</span>}
+                  {item.attribution && <span class="media-attribution">{item.attribution}</span>}
+                </figcaption>
+              )}
+            </figure>
+          ))}
+        </div>
+      ) : (
+        <div class="gallery-placeholder">
+          <div>
+            <strong>作品预览稍后补充</strong>
+            <p>这个条目目前没有封面或画廊资源。内容说明与 Prompt 仍可正常查看。</p>
+          </div>
+        </div>
+      )}
+    </section>
+
+    <div class="detail-columns">
+      <section class="article-panel detail-section" aria-labelledby="instructions-heading">
+        <div class="detail-section-heading">
+          <h2 id="instructions-heading">使用说明</h2>
+          <p>由 Markdown 内容文件维护</p>
+        </div>
+        <article class="markdown-body">
+          <Content />
+        </article>
+      </section>
+
+      <aside class="sidebar-panel detail-section" aria-labelledby="details-heading">
+        <h2 id="details-heading">条目信息</h2>
+        <dl class="fact-list">
+          <div>
+            <dt>类型</dt>
+            <dd>{typeLabels[type]}</dd>
+          </div>
+          <div>
+            <dt>分类</dt>
+            <dd>{category}</dd>
+          </div>
+          <div>
+            <dt>支持工具</dt>
+            <dd>{supportedTools.length ? supportedTools.join('、') : '未指定'}</dd>
+          </div>
+          <div>
+            <dt>许可证</dt>
+            <dd>{license ?? '未提供'}</dd>
+          </div>
+          {skillPath && (
+            <div>
+              <dt>来源路径</dt>
+              <dd>
+                <code>{skillPath}</code>
+              </dd>
+            </div>
+          )}
+          <div>
+            <dt>创建日期</dt>
+            <dd>
+              <time datetime={createdAt.toISOString()}>{displayDate(createdAt)}</time>
+            </dd>
+          </div>
+          <div>
+            <dt>最近更新</dt>
+            <dd>
+              <time datetime={updatedAt.toISOString()}>{displayDate(updatedAt)}</time>
+            </dd>
+          </div>
+          {sourceUrl && (
+            <div>
+              <dt>来源</dt>
+              <dd>
+                <a href={sourceUrl} target="_blank" rel="noreferrer">
+                  打开原始来源 ↗
+                </a>
+              </dd>
+            </div>
+          )}
+          {repoUrl && (
+            <div>
+              <dt>来源仓库</dt>
+              <dd>
+                <a href={repoUrl} target="_blank" rel="noreferrer">
+                  打开仓库 ↗
+                </a>
+              </dd>
+            </div>
+          )}
+        </dl>
+        {tags.length > 0 && <p class="result-count">标签：{tags.join(' · ')}</p>}
+      </aside>
+    </div>
+
+    <section class="prompt-panel" aria-labelledby="prompt-heading">
+      <div class="copy-heading">
+        <div>
+          <h2 id="prompt-heading">完整 Prompt</h2>
+          <span>可复制后按自己的工具与素材调整</span>
+        </div>
+        <button
+          class="copy-button"
+          type="button"
+          data-copy-target="prompt-code"
+          aria-label="复制完整 Prompt"
+        >
+          <span aria-hidden="true">▢</span> 复制 Prompt
+        </button>
+      </div>
+      <pre class="prompt-code"><code id="prompt-code">{prompt}</code></pre>
+      <p class="copy-status" data-copy-status aria-live="polite"></p>
+    </section>
+
+    {installCommand && (
+      <section class="prompt-panel" aria-labelledby="install-heading">
+        <div class="copy-heading">
+          <div>
+            <h2 id="install-heading">安装命令</h2>
+            <span>复制前请确认命令来源与安全性</span>
+          </div>
+          <button
+            class="copy-button"
+            type="button"
+            data-copy-target="install-code"
+            aria-label="复制安装命令"
+          >
+            复制命令
+          </button>
+        </div>
+        <pre class="prompt-code"><code id="install-code">{installCommand}</code></pre>
+        <p class="copy-status" data-copy-status aria-live="polite"></p>
+      </section>
+    )}
+
+    <nav class="detail-pagination" aria-label="作品导航">
+      {previousSkill ? (
+        <a class="pagination-link" href={`/skills/${previousSkill.id}`}>
+          <span aria-hidden="true">←</span>
+          <span>
+            <small>上一篇</small>
+            {previousSkill.data.name}
+          </span>
+        </a>
+      ) : (
+        <span class="pagination-link" aria-hidden="true"></span>
+      )}
+      {nextSkill ? (
+        <a class="pagination-link" href={`/skills/${nextSkill.id}`}>
+          <span>
+            <small>下一篇</small>
+            {nextSkill.data.name}
+          </span>
+          <span aria-hidden="true">→</span>
+        </a>
+      ) : (
+        <a class="pagination-link" href="/#library">
+          <span>回到作品画廊</span>
+          <span aria-hidden="true">→</span>
+        </a>
+      )}
+    </nav>
+
+    {relatedSkills.length > 0 && (
+      <section class="detail-section" aria-labelledby="related-heading">
+        <div class="detail-section-heading">
+          <h2 id="related-heading">你也许会喜欢</h2>
+          <p>依分类与类型推荐</p>
+        </div>
+        <div class="related-grid">
+          {relatedSkills.map((related) => (
+            <SkillCard entry={related} />
+          ))}
+        </div>
+      </section>
+    )}
+  </main>
+  <script>
+    import '../../scripts/detail';
+    import '../../scripts/media-fallback';
+  </script>
+</SiteLayout>
