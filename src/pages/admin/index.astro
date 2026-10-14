@@ -1,0 +1,134 @@
+---
+import SiteLayout from '../../layouts/SiteLayout.astro';
+import '../../styles/global.css';
+
+const description = '管理 My Skill Library 导入与发布任务的受保护后台。';
+---
+
+<SiteLayout title="管理后台 — My Skill Library" description={description} noindex>
+  <main id="main-content" class="page-shell admin-shell">
+    <nav class="breadcrumbs" aria-label="面包屑">
+      <a href="/">首页</a>
+      <span class="breadcrumb-separator" aria-hidden="true">
+        /
+      </span>
+      <span aria-current="page">管理后台</span>
+    </nav>
+
+    <section class="detail-hero admin-hero" aria-labelledby="admin-title">
+      <p class="eyebrow">
+        <span class="eyebrow-dot" aria-hidden="true"></span> PRIVATE WORKSPACE
+      </p>
+      <h1 id="admin-title">管理后台</h1>
+      <p class="detail-description">
+        管理导入草稿与发布任务。管理员身份由 Cloudflare Access 与 Worker
+        服务端共同验证；页面隐藏不作为安全边界。
+      </p>
+      <div class="detail-actions">
+        <a class="action-link" href="/admin/import">
+          导入 GitHub Skill <span aria-hidden="true">→</span>
+        </a>
+        <a class="action-link" href="/">
+          返回公开画廊
+        </a>
+      </div>
+    </section>
+
+    <section class="detail-section admin-status-card" aria-labelledby="access-heading">
+      <div class="detail-section-heading">
+        <h2 id="access-heading">管理员会话</h2>
+        <p>不会在浏览器保存 GitHub 凭据</p>
+      </div>
+      <p class="admin-session-status" data-admin-session role="status" aria-live="polite">
+        正在验证服务端会话…
+      </p>
+      <p class="admin-safety-note">
+        若 Access 或 Worker
+        验证配置缺失，后台会拒绝访问；请按管理安全说明完成外部配置，不要关闭服务端校验。
+      </p>
+    </section>
+
+    <section class="detail-section" aria-labelledby="admin-next-heading">
+      <div class="detail-section-heading">
+        <h2 id="admin-next-heading">工作区</h2>
+        <p>当前阶段：安全基础</p>
+      </div>
+      <a class="admin-workspace-link" href="/admin/import">
+        <span>
+          <strong>GitHub Skill 导入</strong>
+          <small>输入公开仓库、目录或 SKILL.md 链接</small>
+        </span>
+        <span aria-hidden="true">→</span>
+      </a>
+    </section>
+  </main>
+  <script>
+    import '../../scripts/admin-session';
+  </script>
+</SiteLayout>
+
+<style>
+  .admin-shell {
+    padding-bottom: 74px;
+  }
+
+  .admin-hero {
+    padding-top: 54px;
+  }
+
+  .admin-status-card {
+    max-width: 760px;
+    border: 1px solid #e8e6ed;
+    border-radius: 18px;
+    background: var(--surface);
+    padding: 22px;
+  }
+
+  .admin-session-status {
+    margin: 0;
+    color: #565760;
+    font-size: 0.92rem;
+    line-height: 1.7;
+  }
+
+  .admin-safety-note {
+    margin: 14px 0 0;
+    color: #777880;
+    font-size: 0.78rem;
+    line-height: 1.7;
+  }
+
+  .admin-workspace-link {
+    display: flex;
+    max-width: 760px;
+    min-height: 82px;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+    border: 1px solid #e8e6ed;
+    border-radius: 16px;
+    background: var(--surface);
+    padding: 18px 21px;
+    transition: border-color 160ms ease;
+  }
+
+  .admin-workspace-link:hover {
+    border-color: #cec4f0;
+  }
+
+  .admin-workspace-link span:first-child {
+    display: grid;
+    gap: 6px;
+  }
+
+  .admin-workspace-link small {
+    color: var(--muted);
+    font-size: 0.8rem;
+  }
+
+  @media (max-width: 560px) {
+    .admin-status-card {
+      padding: 17px;
+    }
+  }
+</style>

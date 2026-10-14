@@ -51,8 +51,19 @@ for (const file of htmlFiles) {
   );
 }
 
+const adminHtmlFiles = htmlFiles.filter((file) =>
+  path.relative(outputRoot, file).startsWith(`admin${path.sep}`),
+);
+assert.equal(adminHtmlFiles.length, 2, 'Both protected admin pages must be statically generated.');
+for (const file of adminHtmlFiles) {
+  const html = await readFile(file, 'utf8');
+  assert.match(html, /<meta name="robots" content="noindex, nofollow"/);
+}
+
 const robots = await readFile(path.join(outputRoot, 'robots.txt'), 'utf8');
 assert.ok(robots.includes(`Sitemap: ${siteOrigin}/sitemap-index.xml`));
+assert.ok(robots.includes('Disallow: /admin'));
+assert.ok(robots.includes('Disallow: /api/admin'));
 assert.ok(!robots.includes('skills.overme.cn'));
 
 for (const file of sitemapFiles) {
@@ -64,6 +75,10 @@ for (const file of sitemapFiles) {
   assert.ok(
     !sitemap.includes('skills.overme.cn'),
     'Sitemap must not contain the legacy plural domain.',
+  );
+  assert.ok(
+    !sitemap.includes(`${siteOrigin}/admin`),
+    'Admin routes must not be indexed in sitemap.',
   );
 }
 

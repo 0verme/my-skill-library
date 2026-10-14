@@ -1,0 +1,144 @@
+---
+import SiteLayout from '../../../layouts/SiteLayout.astro';
+import '../../../styles/global.css';
+
+const description = '在受保护的管理后台解析公开 GitHub Skill 来源。';
+---
+
+<SiteLayout title="导入 GitHub Skill — My Skill Library" description={description} noindex>
+  <main id="main-content" class="page-shell admin-shell">
+    <nav class="breadcrumbs" aria-label="面包屑">
+      <a href="/">首页</a>
+      <span class="breadcrumb-separator" aria-hidden="true">
+        /
+      </span>
+      <a href="/admin">管理后台</a>
+      <span class="breadcrumb-separator" aria-hidden="true">
+        /
+      </span>
+      <span aria-current="page">导入 GitHub Skill</span>
+    </nav>
+
+    <section class="detail-hero admin-hero" aria-labelledby="import-title">
+      <p class="eyebrow">
+        <span class="eyebrow-dot" aria-hidden="true"></span> SAFE IMPORT
+      </p>
+      <h1 id="import-title">导入 GitHub Skill</h1>
+      <p class="detail-description">
+        仅解析公开 GitHub
+        仓库内容。上游文件是不可执行的不可信数据；未确认转载许可前，只保留来源与自行撰写的说明。
+      </p>
+    </section>
+
+    <section class="detail-section import-panel" aria-labelledby="source-heading">
+      <div class="detail-section-heading">
+        <h2 id="source-heading">来源链接</h2>
+        <p>仓库、单个 Skill 目录或 SKILL.md 文件</p>
+      </div>
+      <form data-import-form>
+        <label for="github-source">GitHub URL</label>
+        <input
+          id="github-source"
+          name="source"
+          type="url"
+          inputmode="url"
+          autocomplete="url"
+          placeholder="https://github.com/owner/repository/tree/main/skills/example"
+          aria-describedby="import-help import-status"
+          disabled
+        />
+        <p id="import-help" class="import-help">
+          导入解析器将在下一阶段启用。此页面和后续 API 均由 Worker 进行服务端鉴权。
+        </p>
+        <button type="button" class="import-button" disabled>
+          解析来源
+        </button>
+        <p id="import-status" class="import-status" role="status" aria-live="polite">
+          导入功能正在开发中；不会在配置缺失时开放写入 API。
+        </p>
+      </form>
+    </section>
+
+    <p class="admin-back-link">
+      <a href="/admin">← 返回管理后台</a>
+    </p>
+  </main>
+</SiteLayout>
+
+<style>
+  .admin-shell {
+    padding-bottom: 74px;
+  }
+
+  .admin-hero {
+    padding-top: 54px;
+  }
+
+  .import-panel {
+    max-width: 760px;
+    border: 1px solid #e8e6ed;
+    border-radius: 18px;
+    background: var(--surface);
+    padding: 23px;
+  }
+
+  form {
+    display: grid;
+    gap: 12px;
+  }
+
+  label {
+    font-size: 0.85rem;
+    font-weight: 620;
+  }
+
+  input {
+    width: 100%;
+    min-height: 48px;
+    border: 1px solid #dedce5;
+    border-radius: 12px;
+    background: #fafafa;
+    padding: 0 14px;
+  }
+
+  input:disabled {
+    color: #73747b;
+    cursor: not-allowed;
+  }
+
+  .import-help,
+  .import-status {
+    margin: 0;
+    color: var(--muted);
+    font-size: 0.8rem;
+    line-height: 1.7;
+  }
+
+  .import-button {
+    width: fit-content;
+    min-height: 42px;
+    border: 0;
+    border-radius: 11px;
+    background: var(--accent);
+    padding: 0 17px;
+    color: #fff;
+    font-weight: 600;
+  }
+
+  .import-button:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
+
+  .admin-back-link {
+    margin-top: 24px;
+    color: #6046c4;
+    font-size: 0.84rem;
+  }
+
+  @media (max-width: 560px) {
+    .import-panel {
+      padding: 17px;
+    }
+  }
+</style>

@@ -1,6 +1,6 @@
 # My Skill Library
 
-一个中文优先的个人 AI Skills、Prompts 与 Workflows 展示馆。作品由 Astro Content Collections 从 Markdown 静态生成；不需要登录、后端、数据库或在线 AI 服务。
+一个中文优先的个人 AI Skills、Prompts 与 Workflows 展示馆。公开作品由 Astro Content Collections 从 Markdown 静态生成；公开画廊不需要登录、数据库或在线 AI 服务。管理后台通过 Cloudflare Worker 服务端鉴权，与公开画廊分开保护。
 
 > v0.1 里的四个条目、提示词与 SVG 均为项目原创的**演示内容**，不代表第三方 Skill 已运行或通过验证。预期正式域名为 `https://skill.overme.cn`，域名绑定与线上可用性需单独核验。
 
@@ -9,8 +9,8 @@
 - Astro 7 + TypeScript，默认静态生成（SSG）
 - Astro Content Collections + Zod Schema
 - Tailwind CSS 4（Vite 插件）与少量手写设计系统
-- GitHub Actions：类型/内容检查、格式检查、正式构建、Wrangler dry-run、Playwright 浏览器冒烟
-- Cloudflare Workers Static Assets，Wrangler 静态资源目录为 `dist/`
+- GitHub Actions：类型/内容检查、Mock 安全测试、格式检查、正式构建、Wrangler dry-run、Playwright 浏览器冒烟
+- Cloudflare Worker + Workers Static Assets：公开页面使用 `dist/`，`/admin` 与 `/api/admin` 先经过 Worker JWT 验证
 
 没有 SSR Adapter、客户端组件框架、数据库、D1、KV 或 R2。
 
@@ -28,16 +28,17 @@ npm ci
 npm run dev
 ```
 
-Astro 会在终端显示本地地址（通常为 `http://localhost:4321`）。
+Astro 会在终端显示本地地址（通常为 `http://localhost:4321`）。`npm run dev` 只用于静态页面开发，不会模拟 Cloudflare Worker 鉴权；验证后台安全请使用 Wrangler Worker 集成测试（`npm run test:e2e`）。
 
 ```bash
 npm run check        # Astro、TypeScript、Content Collection Schema 检查
 npm run test:schema  # Skill 可省略 prompt，Prompt 必须提供 prompt
+npm run test:worker  # Mock Access JWT / JWKS、同源、幂等、限流、GitHub App 安全测试
 npm run format:check # Prettier 格式检查
 npm run build        # 生产静态构建，产物在 dist/
 npm run test:seo    # 校验 canonical、OG、sitemap、robots 的正式域名
 npm run preview      # 预览 Astro 静态构建
-npm run test:e2e     # Chromium 浏览器冒烟测试（首次需安装浏览器）
+npm run test:e2e     # 构建后经 Wrangler Worker 跑 Chromium 冒烟（首次需安装浏览器）
 ```
 
 Playwright 首次安装：
@@ -108,10 +109,18 @@ Wrangler 会在部署时要求选择/使用当前账号，并输出 Worker 的�
 
 静态站点地址在 `astro.config.ts` 集中预设，因此 canonical、Open Graph 与 sitemap 指向预期域名。部署到其他域名时请先更新该 `site` 配置与 `public/robots.txt`。
 
+## 管理后台与外部鉴权
+
+管理页面位于 `/admin` 与 `/admin/import`。生产 Worker 会在返回管理 HTML 或处理 `/api/admin/*` 前，服务端验证 Cloudflare Access JWT 签名、issuer、audience、有效期和管理员邮箱；`workers.dev` 与正式域名复用同一验证。未配置 Access 环境变量时受保护路径默认返回 `503`，不会开放写入端点。Phase 1 只启用了只读会话 API，GitHub 导入/发布能力尚未开放。
+
+真实 Cloudflare Access policy、管理员 allowlist 和 GitHub App 凭据需要仓库/账号管理员在 Cloudflare/GitHub 完成配置；当前没有真实身份集成凭据，Mock 自动化测试不代表生产鉴权已通过。请按 [管理后台安全配置与最小权限 SOP](docs/admin-security.md) 操作。禁止把 GitHub App 私钥、installation token 或 Access JWT 写入仓库、静态资源、日志或浏览器代码。
+
 ## 页面与内容结构
 
 - `src/pages/index.astro`：首页搜索、数据驱动分类、精选卡片和空结果状态
 - `src/pages/skills/[slug].astro`：由 Collection 自动生成的静态详情页
+- `src/pages/admin/`：受 Worker 中间件保护的管理页面（并从 Sitemap 排除）
+- `src/worker.ts`、`src/lib/admin/`：Worker 请求路由、Access JWT、CSRF、幂等基础、限流与服务端 GitHub App 基础
 - `src/content.config.ts`：Zod 内容模型与 URL/媒体路径校验
 - `src/content/skills/`：Markdown 条目
 - `public/skills/`：原创封面与画廊素材

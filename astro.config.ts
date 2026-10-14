@@ -8,7 +8,14 @@ export default defineConfig({
   site: 'https://skill.overme.cn',
   output: 'static',
   trailingSlash: 'never',
-  integrations: [sitemap()],
+  integrations: [
+    sitemap({
+      filter: (page) => {
+        const pathname = new URL(page).pathname;
+        return pathname !== '/admin' && !pathname.startsWith('/admin/');
+      },
+    }),
+  ],
   markdown: {
     syntaxHighlight: false,
     processor: unified({
